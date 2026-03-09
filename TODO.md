@@ -1,44 +1,19 @@
-# Add Product Page Improvements
+# TODO - Vercel Deployment Fix
 
-## Completed Tasks
+## Completed Steps:
+- [x] 1. Analyze current project structure and configuration
 
-### 1. ✅ Improve Dark Mode UI
-- [x] Update page background to dark:bg-gray-900
-- [x] Use dark:bg-gray-800 cards with rounded-xl
-- [x] Add shadow-lg for modern look
-- [x] Add focus:ring-blue-500 to inputs
-- [x] Use consistent gap-6 spacing
+## Pending Steps:
+- [x] 2. Update App.jsx - Switch from BrowserRouter to HashRouter
+- [x] 3. Update App.jsx - Add explicit /add-product and /add-category routes
+- [x] 4. Verify vite.config.js configuration (✅ correct)
+- [x] 5. Verify vercel.json configuration (✅ correct)
+- [x] 6. Build project locally (npm run build) - ✅ SUCCESS
+- [ ] 7. Commit and push changes to GitHub
 
-### 2. ✅ Replace Gender with Category
-- [x] Remove Gender dropdown from form
-- [x] Add Category dropdown fetching from categories API
-- [x] Update validation to check Category
-
-### 3. ✅ Multiple Product Images Upload (Instagram/Shopify Style)
-- [x] Create Instagram/Shopify style grid layout
-- [x] Display uploaded images in square cards
-- [x] Last card with "+" icon for adding more
-- [x] Add hover effect with remove button
-- [x] Add "Upload multiple product images" text
-- [x] Support drag and drop
-- [x] Store images in array state
-
-### 4. ✅ Redesign ColorVariantManager.jsx
-- [x] Each color variant as vertical card
-- [x] Color picker at top
-- [x] Image upload below
-- [x] Size quantity counters (S, M, L, XL, XXL)
-- [x] Total quantity display per color
-
-### 5. ✅ Size Quantity Counters
-- [x] Use S, M, L, XL, XXL sizes
-- [x] Each with QuantityCounter component
-- [x] Show Total Stock automatically
-
-### 6. ✅ Organized Page Layout
-- [x] Product Images section
-- [x] Basic Information section
-- [x] Inventory & Sizes section
-- [x] Color Variants section
-- [x] Save Product button at bottom
+## Notes:
+- Route changes:
+  - /add-product → AddProduct component
+  - /add-category → CategoryManager component
+- HashRouter chosen for better Vercel SPA compatibility
 

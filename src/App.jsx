@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
@@ -27,7 +27,7 @@ function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
+        <HashRouter>
           <AuthProvider>
             <Toaster position="top-right" />
             <Routes>
@@ -36,8 +36,15 @@ function App() {
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/orders" element={<OrderManagement />} />
+                
+                {/* Add Product Routes */}
+                <Route path="/add-product" element={<AddProduct />} />
                 <Route path="/products/add" element={<AddProduct />} />
+                
+                {/* Add Category Routes */}
+                <Route path="/add-category" element={<CategoryManager />} />
                 <Route path="/categories" element={<CategoryManager />} />
+                
                 <Route path="/notifications" element={<Notifications />} />
                 <Route path="/calendar" element={<Calendar />} />
                 <Route path="/payment" element={<PaymentWay />} />
@@ -49,7 +56,7 @@ function App() {
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </AuthProvider>
-        </BrowserRouter>
+        </HashRouter>
       </QueryClientProvider>
     </ErrorBoundary>
   );
