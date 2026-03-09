@@ -19,7 +19,10 @@ const PaymentWay = () => {
     queryKey: ['payment-methods'],
     queryFn: async () => {
       const response = await api.get('/payment/methods');
-      return response.data;
+      // Ensure we always return an array
+      if (!response.data) return [];
+      if (Array.isArray(response.data)) return response.data;
+      return [];
     },
   });
 

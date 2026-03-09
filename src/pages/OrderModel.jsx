@@ -13,7 +13,10 @@ const OrderModel = () => {
     queryKey: ['model-requirements'],
     queryFn: async () => {
       const response = await api.get('/model/requirements');
-      return response.data;
+      // Ensure we always return an array
+      if (!response.data) return [];
+      if (Array.isArray(response.data)) return response.data;
+      return [];
     },
   });
 
@@ -22,7 +25,10 @@ const OrderModel = () => {
     queryKey: ['model-approved'],
     queryFn: async () => {
       const response = await api.get('/model/approved');
-      return response.data;
+      // Ensure we always return an array
+      if (!response.data) return [];
+      if (Array.isArray(response.data)) return response.data;
+      return [];
     },
   });
 
@@ -31,7 +37,10 @@ const OrderModel = () => {
     queryKey: ['model-pending'],
     queryFn: async () => {
       const response = await api.get('/model/pending');
-      return response.data;
+      // Ensure we always return an array
+      if (!response.data) return [];
+      if (Array.isArray(response.data)) return response.data;
+      return [];
     },
   });
 
