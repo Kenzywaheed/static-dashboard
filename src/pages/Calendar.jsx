@@ -15,7 +15,10 @@ const Calendar = () => {
     queryKey: ['calendar-events'],
     queryFn: async () => {
       const response = await api.get('/calendar/events');
-      return response.data;
+      // Ensure we always return an array
+      if (!response.data) return [];
+      if (Array.isArray(response.data)) return response.data;
+      return [];
     },
   });
 
@@ -24,7 +27,10 @@ const Calendar = () => {
     queryKey: ['calendar-orders'],
     queryFn: async () => {
       const response = await api.get('/calendar/orders');
-      return response.data;
+      // Ensure we always return an array
+      if (!response.data) return [];
+      if (Array.isArray(response.data)) return response.data;
+      return [];
     },
   });
 

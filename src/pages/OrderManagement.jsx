@@ -21,7 +21,10 @@ const OrderManagement = () => {
     queryKey: ['orders'],
     queryFn: async () => {
       const response = await api.get('/orders');
-      return response.data;
+      // Ensure we always return an array
+      if (!response.data) return [];
+      if (Array.isArray(response.data)) return response.data;
+      return [];
     },
   });
 

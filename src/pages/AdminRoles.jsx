@@ -15,7 +15,10 @@ const AdminRoles = () => {
     queryKey: ['admins'],
     queryFn: async () => {
       const response = await api.get('/admins');
-      return response.data;
+      // Ensure we always return an array
+      if (!response.data) return [];
+      if (Array.isArray(response.data)) return response.data;
+      return [];
     },
   });
 
@@ -24,7 +27,10 @@ const AdminRoles = () => {
     queryKey: ['admin-roles'],
     queryFn: async () => {
       const response = await api.get('/admins/roles');
-      return response.data;
+      // Ensure we always return an array
+      if (!response.data) return [];
+      if (Array.isArray(response.data)) return response.data;
+      return [];
     },
   });
 

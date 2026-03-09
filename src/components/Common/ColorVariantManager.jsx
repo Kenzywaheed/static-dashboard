@@ -71,7 +71,8 @@ const ColorVariantManager = ({
   };
 
   const getTotalQuantity = (color) => {
-    return Object.values(color.sizes).reduce((sum, qty) => sum + qty, 0);
+    if (!color || !color.sizes) return 0;
+    return Object.values(color.sizes).reduce((sum, qty) => sum + (qty || 0), 0);
   };
 
   return (

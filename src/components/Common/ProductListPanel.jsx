@@ -8,7 +8,20 @@ const ProductListPanel = ({ onEdit, className = '' }) => {
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['products'],
-    queryFn: productsAPI.getAll,
+    queryFn: async () => {
+      try {
+        const res = await productsAPI.getAll();
+        console.log("Products API Response:", res.data);
+        // Ensure we always return an array
+        if (!res.data) return [];
+        if (Array.isArray(res.data)) return res.data;
+        if (res.data.products) return res.data.products;
+        return [];
+      } catch (error) {
+        console.error("Products API Error:", error);
+        return [];
+      }
+    },
   });
 
   const deleteMutation = useMutation({

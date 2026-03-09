@@ -23,7 +23,10 @@ const Notifications = () => {
     queryKey: ['notifications'],
     queryFn: async () => {
       const response = await api.get('/notifications');
-      return response.data;
+      // Ensure we always return an array
+      if (!response.data) return [];
+      if (Array.isArray(response.data)) return response.data;
+      return [];
     },
   });
 
@@ -32,7 +35,7 @@ const Notifications = () => {
     queryKey: ['notifications-stats'],
     queryFn: async () => {
       const response = await api.get('/notifications/stats');
-      return response.data;
+      return response.data || {};
     },
   });
 
@@ -41,7 +44,10 @@ const Notifications = () => {
     queryKey: ['notifications-chart'],
     queryFn: async () => {
       const response = await api.get('/notifications/chart-data');
-      return response.data;
+      // Ensure we always return an array
+      if (!response.data) return [];
+      if (Array.isArray(response.data)) return response.data;
+      return [];
     },
     refetchInterval: 30000, // Refresh every 30 seconds
   });

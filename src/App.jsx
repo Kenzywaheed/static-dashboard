@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
+import ErrorBoundary from './components/Common/ErrorBoundary';
 import Layout from './components/Layout/Layout';
 import Dashboard from './pages/Dashboard';
 import OrderManagement from './pages/OrderManagement';
@@ -24,31 +25,33 @@ const queryClient = new QueryClient({
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <Toaster position="top-right" />
-          <Routes>
-            {/* Main Layout with all pages */}
-            <Route element={<Layout />}>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/orders" element={<OrderManagement />} />
-              <Route path="/products/add" element={<AddProduct />} />
-              <Route path="/categories" element={<CategoryManager />} />
-              <Route path="/notifications" element={<Notifications />} />
-              <Route path="/calendar" element={<Calendar />} />
-              <Route path="/payment" element={<PaymentWay />} />
-              <Route path="/order-model" element={<OrderModel />} />
-              <Route path="/admin-roles" element={<AdminRoles />} />
-            </Route>
-            
-            {/* Catch all - redirect to dashboard */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <AuthProvider>
+            <Toaster position="top-right" />
+            <Routes>
+              {/* Main Layout with all pages */}
+              <Route element={<Layout />}>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/orders" element={<OrderManagement />} />
+                <Route path="/products/add" element={<AddProduct />} />
+                <Route path="/categories" element={<CategoryManager />} />
+                <Route path="/notifications" element={<Notifications />} />
+                <Route path="/calendar" element={<Calendar />} />
+                <Route path="/payment" element={<PaymentWay />} />
+                <Route path="/order-model" element={<OrderModel />} />
+                <Route path="/admin-roles" element={<AdminRoles />} />
+              </Route>
+              
+              {/* Catch all - redirect to dashboard */}
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

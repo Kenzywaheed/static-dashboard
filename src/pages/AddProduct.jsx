@@ -42,15 +42,21 @@ const AddProduct = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [dragOver, setDragOver] = useState(false);
 
-  /* ================= FETCH PRODUCTS ================= */
+/* ================= FETCH PRODUCTS ================= */
 
-  const { data: products = [] } = useQuery({
+  const { data: products = [], isLoading: productsLoading } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
       try {
         const res = await api.get("/products");
-        return res.data || [];
-      } catch {
+        console.log("Products API Response (AddProduct):", res.data);
+        // Ensure we always return an array
+        if (!res.data) return [];
+        if (Array.isArray(res.data)) return res.data;
+        if (res.data.products) return res.data.products;
+        return [];
+      } catch (error) {
+        console.error("Failed to fetch products:", error);
         return [];
       }
     },
@@ -58,13 +64,14 @@ const AddProduct = () => {
 
   /* ================= FETCH CATEGORIES ================= */
 
-  const { data: categories = [] } = useQuery({
+  const { data: categories = [], isLoading: categoriesLoading } = useQuery({
     queryKey: ["categories"],
     queryFn: async () => {
       try {
         const res = await api.get("/categories");
         return res.data || [];
-      } catch {
+      } catch (error) {
+        console.error("Failed to fetch categories:", error);
         return [];
       }
     },
