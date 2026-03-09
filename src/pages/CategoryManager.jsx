@@ -1,8 +1,15 @@
+
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { PencilIcon, TrashIcon, FolderIcon } from '@heroicons/react/24/outline';
-import api from '../services/api';
 import toast from 'react-hot-toast';
+
+// Static mock data
+const MOCK_CATEGORIES = [
+  { id: 1, name: 'T-Shirts', gender: 'Unisex', details: 'All types of t-shirts', parentId: null },
+  { id: 2, name: 'Jeans', gender: 'Male', details: 'Denim and casual jeans', parentId: null },
+  { id: 3, name: 'Dresses', gender: 'Female', details: 'Casual and formal dresses', parentId: null },
+  { id: 4, name: 'Casual Wear', gender: 'Unisex', details: 'Casual clothing items', parentId: null },
+  { id: 5, name: 'Formal Wear', gender: 'Unisex', details: 'Formal clothing items', parentId: null },
+];
 
 const CategoryManager = () => {
   const [form, setForm] = useState({
@@ -13,49 +20,7 @@ const CategoryManager = () => {
   });
 
   const [editingId, setEditingId] = useState(null);
-  const queryClient = useQueryClient();
-
-  const { data: categories = [], isLoading } = useQuery({
-    queryKey: ['categories'],
-    queryFn: async () => {
-      try {
-        const res = await api.get('/categories');
-        return res.data || [];
-      } catch (e) {
-        return [];
-      }
-    }
-  });
-
-  const createMutation = useMutation({
-    mutationFn: (data) => api.post('/categories', data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
-      toast.success('Category created!');
-      setForm({ name: '', gender: '', details: '', parentId: '' });
-    },
-    onError: () => toast.error('Failed to create')
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => api.put(`/categories/${id}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
-      toast.success('Category updated!');
-      setEditingId(null);
-      setForm({ name: '', gender: '', details: '', parentId: '' });
-    },
-    onError: () => toast.error('Failed to update')
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id) => api.delete(`/categories/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
-      toast.success('Category deleted!');
-    },
-    onError: () => toast.error('Failed to delete')
-  });
+  const [categories, setCategories] = useState(MOCK_CATEGORIES);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -65,16 +30,24 @@ const CategoryManager = () => {
       return;
     }
 
-    const data = {
+    const categoryData = {
       ...form,
       parentId: form.parentId ? parseInt(form.parentId) : null
     };
 
     if (editingId) {
-      updateMutation.mutate({ id: editingId, data });
+      // Update existing category
+      setCategories(categories.map(c => c.id === editingId ? { ...c, ...categoryData, id: editingId } : c));
+      toast.success('Category updated!');
+      setEditingId(null);
     } else {
-      createMutation.mutate(data);
+      // Create new category
+      const newCategory = { ...categoryData, id: Date.now() };
+      setCategories([...categories, newCategory]);
+      toast.success('Category created!');
     }
+
+    setForm({ name: '', gender: '', details: '', parentId: '' });
   };
 
   const handleEdit = (cat) => {
@@ -89,7 +62,8 @@ const CategoryManager = () => {
 
   const handleDelete = (id) => {
     if (confirm('Delete this category?')) {
-      deleteMutation.mutate(id);
+      setCategories(categories.filter(c => c.id !== id));
+      toast.success('Category deleted!');
     }
   };
 
@@ -206,10 +180,7 @@ const CategoryManager = () => {
 
               <button
                 type="submit"
-                disabled={
-                  createMutation.isPending || updateMutation.isPending
-                }
-                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
+                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
               >
                 {editingId ? 'Update' : 'Create'}
               </button>
@@ -235,16 +206,7 @@ const CategoryManager = () => {
             All Categories ({categories.length})
           </h2>
 
-          {isLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="h-16 bg-gray-200 rounded animate-pulse"
-                />
-              ))}
-            </div>
-          ) : categories.length === 0 ? (
+          {categories.length === 0 ? (
             <p className="text-gray-500 text-center py-8">
               No categories yet
             </p>
@@ -258,7 +220,9 @@ const CategoryManager = () => {
                 >
 
                   <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                    <FolderIcon className="h-5 w-5 text-blue-500" />
+                    <svg className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                    </svg>
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -276,14 +240,18 @@ const CategoryManager = () => {
                       onClick={() => handleEdit(cat)}
                       className="p-2 text-blue-500 hover:bg-blue-100 rounded"
                     >
-                      <PencilIcon className="h-4 w-4" />
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
                     </button>
 
                     <button
                       onClick={() => handleDelete(cat.id)}
                       className="p-2 text-red-500 hover:bg-red-100 rounded"
                     >
-                      <TrashIcon className="h-4 w-4" />
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
                     </button>
 
                   </div>
@@ -301,3 +269,4 @@ const CategoryManager = () => {
 };
 
 export default CategoryManager;
+

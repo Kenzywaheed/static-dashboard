@@ -1,64 +1,16 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
 import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
-import { productsAPI } from '../../services/endpoints';
-import toast from 'react-hot-toast';
 
-const ProductListPanel = ({ onEdit, className = '' }) => {
-  const queryClient = useQueryClient();
+// Static mock products data
+const MOCK_PRODUCTS = [
+  { id: 1, name: 'Classic White T-Shirt', price: 29.99, description: 'Premium cotton t-shirt', category: 'T-Shirts', sizes: { S: 10, M: 15, L: 8, XL: 5, XXL: 2 }, quantity: 40, image: 'https://via.placeholder.com/150' },
+  { id: 2, name: 'Denim Jeans', price: 79.99, description: 'Classic fit denim jeans', category: 'Jeans', sizes: { S: 0, M: 8, L: 12, XL: 6, XXL: 3 }, quantity: 29, image: 'https://via.placeholder.com/150' },
+  { id: 3, name: 'Summer Dress', price: 59.99, description: 'Light and breezy summer dress', category: 'Dresses', sizes: { S: 5, M: 10, L: 7, XL: 0, XXL: 0 }, quantity: 22, image: 'https://via.placeholder.com/150' },
+];
 
-  const { data: products = [], isLoading } = useQuery({
-    queryKey: ['products'],
-    queryFn: async () => {
-      try {
-        const res = await productsAPI.getAll();
-        console.log("Products API Response:", res.data);
-        // Ensure we always return an array
-        if (!res.data) return [];
-        if (Array.isArray(res.data)) return res.data;
-        if (res.data.products) return res.data.products;
-        return [];
-      } catch (error) {
-        console.error("Products API Error:", error);
-        return [];
-      }
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id) => productsAPI.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['products']);
-      toast.success('Product deleted successfully');
-    },
-    onError: () => {
-      toast.error('Failed to delete product');
-    },
-  });
-
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this product?')) {
-      deleteMutation.mutate(id);
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 ${className}`}>
-        <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">All Products</h3>
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse flex gap-3">
-              <div className="w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded-lg" />
-              <div className="flex-1 space-y-2">
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+const ProductListPanel = ({ products: propProducts, onEdit, onDelete, className = '' }) => {
+  // Use prop products if provided, otherwise use mock data
+  const products = propProducts || MOCK_PRODUCTS;
 
   return (
     <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 ${className}`}>
@@ -80,7 +32,7 @@ const ProductListPanel = ({ onEdit, className = '' }) => {
               {/* Product Image */}
               <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-gray-200 dark:bg-gray-600">
                 <img
-                  src={product.image || 'https://via.placeholder.com/150'}
+                  src={product.image || product.images?.[0] || 'https://via.placeholder.com/150'}
                   alt={product.name}
                   className="w-full h-full object-cover"
                 />
@@ -98,20 +50,24 @@ const ProductListPanel = ({ onEdit, className = '' }) => {
 
               {/* Actions */}
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => onEdit(product)}
-                  className="p-2 text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                  title="Edit"
-                >
-                  <PencilIcon className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(product.id)}
-                  className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                  title="Delete"
-                >
-                  <TrashIcon className="h-4 w-4" />
-                </button>
+                {onEdit && (
+                  <button
+                    onClick={() => onEdit(product)}
+                    className="p-2 text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                    title="Edit"
+                  >
+                    <PencilIcon className="h-4 w-4" />
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    onClick={() => onDelete(product.id)}
+                    className="p-2 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                    title="Delete"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
           ))}

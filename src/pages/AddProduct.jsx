@@ -1,13 +1,6 @@
-import { useState, useEffect, useRef } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { 
-  TrashIcon, 
-  PlusIcon, 
-  PhotoIcon,
-  CloudArrowUpIcon
-} from "@heroicons/react/24/outline";
-import api from "../services/api";
+
+import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import ColorVariantManager from "../components/Common/ColorVariantManager";
 import ProductListPanel from "../components/Common/ProductListPanel";
@@ -15,12 +8,25 @@ import QuantityCounter from "../components/Common/QuantityCounter";
 
 const SIZES = ["S", "M", "L", "XL", "XXL"];
 
+// Static mock data
+const MOCK_CATEGORIES = [
+  { id: 1, name: 'T-Shirts', gender: 'Unisex' },
+  { id: 2, name: 'Jeans', gender: 'Male' },
+  { id: 3, name: 'Dresses', gender: 'Female' },
+  { id: 4, name: 'Casual Wear', gender: 'Unisex' },
+  { id: 5, name: 'Formal Wear', gender: 'Unisex' },
+];
+
+const MOCK_PRODUCTS = [
+  { id: 1, name: 'Classic White T-Shirt', price: 29.99, description: 'Premium cotton t-shirt', category: 'T-Shirts', sizes: { S: 10, M: 15, L: 8, XL: 5, XXL: 2 }, quantity: 40, images: ['https://via.placeholder.com/150'] },
+  { id: 2, name: 'Denim Jeans', price: 79.99, description: 'Classic fit denim jeans', category: 'Jeans', sizes: { S: 0, M: 8, L: 12, XL: 6, XXL: 3 }, quantity: 29, images: ['https://via.placeholder.com/150'] },
+  { id: 3, name: 'Summer Dress', price: 59.99, description: 'Light and breezy summer dress', category: 'Dresses', sizes: { S: 5, M: 10, L: 7, XL: 0, XXL: 0 }, quantity: 22, images: ['https://via.placeholder.com/150'] },
+];
+
 const AddProduct = () => {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const editId = searchParams.get("edit");
   const fileInputRef = useRef(null);
+  const [editId, setEditId] = useState(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -39,43 +45,10 @@ const AddProduct = () => {
   
   const [images, setImages] = useState([]);
   const [colors, setColors] = useState([]);
-  const [editingProduct, setEditingProduct] = useState(null);
+  const [products, setProducts] = useState(MOCK_PRODUCTS);
   const [dragOver, setDragOver] = useState(false);
 
-/* ================= FETCH PRODUCTS ================= */
-
-  const { data: products = [], isLoading: productsLoading } = useQuery({
-    queryKey: ["products"],
-    queryFn: async () => {
-      try {
-        const res = await api.get("/products");
-        console.log("Products API Response (AddProduct):", res.data);
-        // Ensure we always return an array
-        if (!res.data) return [];
-        if (Array.isArray(res.data)) return res.data;
-        if (res.data.products) return res.data.products;
-        return [];
-      } catch (error) {
-        console.error("Failed to fetch products:", error);
-        return [];
-      }
-    },
-  });
-
-  /* ================= FETCH CATEGORIES ================= */
-
-  const { data: categories = [], isLoading: categoriesLoading } = useQuery({
-    queryKey: ["categories"],
-    queryFn: async () => {
-      try {
-        const res = await api.get("/categories");
-        return res.data || [];
-      } catch (error) {
-        console.error("Failed to fetch categories:", error);
-        return [];
-      }
-    },
-  });
+  const categories = MOCK_CATEGORIES;
 
   /* ================= COMPUTED TOTAL ================= */
 
@@ -90,58 +63,29 @@ const AddProduct = () => {
 
   /* ================= EDIT PRODUCT ================= */
 
-  useEffect(() => {
-    if (editId && products.length > 0) {
-      const product = products.find((p) => p.id === parseInt(editId));
+  const handleEditClick = (product) => {
+    setEditId(product.id);
+    setForm({
+      name: product.name || "",
+      price: product.price?.toString() || "",
+      description: product.description || "",
+      category: product.category || "",
+    });
 
-      if (product) {
-        setEditingProduct(product);
-
-        setForm({
-          name: product.name || "",
-          price: product.price?.toString() || "",
-          description: product.description || "",
-          category: product.category || "",
-        });
-
-        if (product.sizes && typeof product.sizes === 'object') {
-          setSizeQuantities({
-            S: product.sizes.S || 0,
-            M: product.sizes.M || 0,
-            L: product.sizes.L || 0,
-            XL: product.sizes.XL || 0,
-            XXL: product.sizes.XXL || 0,
-          });
-        } else if (product.quantity !== undefined) {
-          setSizeQuantities({
-            S: product.quantity || 0,
-            M: 0,
-            L: 0,
-            XL: 0,
-            XXL: 0,
-          });
-        }
-
-        if (product.images) {
-          setImages(product.images.map((src, i) => ({ id: i, src })));
-        }
-
-        if (product.colors) {
-          const normalizedColors = product.colors.map(c => ({
-            ...c,
-            sizes: {
-              S: c.sizes?.S || 0,
-              M: c.sizes?.M || 0,
-              L: c.sizes?.L || 0,
-              XL: c.sizes?.XL || 0,
-              XXL: c.sizes?.XXL || 0,
-            }
-          }));
-          setColors(normalizedColors);
-        }
-      }
+    if (product.sizes && typeof product.sizes === 'object') {
+      setSizeQuantities({
+        S: product.sizes.S || 0,
+        M: product.sizes.M || 0,
+        L: product.sizes.L || 0,
+        XL: product.sizes.XL || 0,
+        XXL: product.sizes.XXL || 0,
+      });
     }
-  }, [editId, products]);
+
+    if (product.images) {
+      setImages(product.images.map((src, i) => ({ id: i, src })));
+    }
+  };
 
   /* ================= IMAGE UPLOAD ================= */
 
@@ -217,35 +161,6 @@ const AddProduct = () => {
     return true;
   };
 
-  /* ================= CREATE PRODUCT ================= */
-
-  const createMutation = useMutation({
-    mutationFn: (data) => api.post("/products", data),
-
-    onSuccess: () => {
-      queryClient.invalidateQueries(["products"]);
-      toast.success("Product created successfully!");
-      resetForm();
-    },
-
-    onError: () => toast.error("Failed to create product"),
-  });
-
-  /* ================= UPDATE PRODUCT ================= */
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => api.put(`/products/${id}`, data),
-
-    onSuccess: () => {
-      queryClient.invalidateQueries(["products"]);
-      toast.success("Product updated successfully!");
-      navigate("/products/add");
-      setEditingProduct(null);
-    },
-
-    onError: () => toast.error("Failed to update product"),
-  });
-
   /* ================= SUBMIT ================= */
 
   const handleSubmit = () => {
@@ -253,22 +168,29 @@ const AddProduct = () => {
 
     const totalQty = getTotalStock();
 
-    const data = {
+    const productData = {
       name: form.name,
       price: parseFloat(form.price),
       description: form.description,
       category: form.category,
-      images: images.map((i) => i.src),
+      images: images.length > 0 ? images.map((i) => i.src) : ['https://via.placeholder.com/150'],
       colors,
       sizes: sizeQuantities,
       quantity: totalQty,
     };
 
-    if (editingProduct) {
-      updateMutation.mutate({ id: editingProduct.id, data });
+    if (editId) {
+      // Update existing product
+      setProducts(products.map(p => p.id === editId ? { ...p, ...productData, id: editId } : p));
+      toast.success("Product updated successfully!");
     } else {
-      createMutation.mutate(data);
+      // Create new product
+      const newProduct = { ...productData, id: Date.now() };
+      setProducts([...products, newProduct]);
+      toast.success("Product created successfully!");
     }
+
+    resetForm();
   };
 
   /* ================= RESET ================= */
@@ -290,25 +212,13 @@ const AddProduct = () => {
     });
     setImages([]);
     setColors([]);
-    setEditingProduct(null);
-
-    navigate("/products/add");
+    setEditId(null);
   };
 
-  const handleEdit = (product) => {
-    navigate(`/products/add?edit=${product.id}`);
-  };
-
-  const handleDelete = async (id) => {
+  const handleDelete = (id) => {
     if (!confirm("Are you sure you want to delete this product?")) return;
-
-    try {
-      await api.delete(`/products/${id}`);
-      queryClient.invalidateQueries(["products"]);
-      toast.success("Product deleted successfully");
-    } catch {
-      toast.error("Failed to delete product");
-    }
+    setProducts(products.filter(p => p.id !== id));
+    toast.success("Product deleted successfully");
   };
 
   /* ================= RENDER ================= */
@@ -319,10 +229,10 @@ const AddProduct = () => {
         {/* HEADER */}
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            {editingProduct ? "Edit Product" : "Add Product"}
+            {editId ? "Edit Product" : "Add Product"}
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            {editingProduct ? "Update product details below" : "Create a new product"}
+            {editId ? "Update product details below" : "Create a new product"}
           </p>
         </div>
 
@@ -331,8 +241,7 @@ const AddProduct = () => {
           
           {/* PRODUCT IMAGES */}
           <div>
-            <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white flex items-center justify-center gap-2">
-              <PhotoIcon className="h-6 w-6 text-blue-600" />
+            <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white text-center">
               Product Images
             </h2>
             
@@ -362,7 +271,9 @@ const AddProduct = () => {
                       onClick={() => removeImage(img.id)}
                       className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
                     >
-                      <TrashIcon className="h-4 w-4" />
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
                   </div>
                 </div>
@@ -374,7 +285,9 @@ const AddProduct = () => {
                   className="aspect-square border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group"
                 >
                   <div className="w-14 h-14 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center group-hover:bg-blue-100 group-hover:scale-110 transition-all">
-                    <PlusIcon className="h-7 w-7 text-gray-400 group-hover:text-blue-600" />
+                    <svg className="h-7 w-7 text-gray-400 group-hover:text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
                   </div>
                   <span className="text-sm text-gray-500 dark:text-gray-400 mt-2 font-medium">Add</span>
                   <input
@@ -401,7 +314,9 @@ const AddProduct = () => {
                     : 'border-gray-300 dark:border-gray-600 hover:border-blue-400'
                 }`}
               >
-                <CloudArrowUpIcon className="h-14 w-14 text-gray-400 mx-auto mb-4" />
+                <svg className="h-14 w-14 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
                 <p className="text-base text-gray-600 dark:text-gray-400 font-medium">
                   Drag and drop images here or click to browse
                 </p>
@@ -414,8 +329,7 @@ const AddProduct = () => {
 
           {/* BASIC INFORMATION */}
           <div className="space-y-5">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-white text-center flex items-center justify-center gap-2">
-              <PhotoIcon className="h-6 w-6 text-blue-600" />
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-white text-center">
               Basic Information
             </h2>
 
@@ -491,8 +405,7 @@ const AddProduct = () => {
           {/* INVENTORY & SIZES */}
           <div className="space-y-5">
             <div className="flex flex-col items-center gap-2">
-              <h2 className="text-xl font-semibold text-gray-800 dark:text-white flex items-center gap-2">
-                <PhotoIcon className="h-6 w-6 text-blue-600" />
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
                 Inventory & Sizes
               </h2>
               <div className="px-6 py-3 bg-blue-50 dark:bg-blue-900/30 rounded-xl">
@@ -528,7 +441,7 @@ const AddProduct = () => {
 
           {/* ACTION BUTTONS */}
           <div className="flex justify-center gap-4 pt-6 border-t border-gray-200 dark:border-gray-600">
-            {editingProduct && (
+            {editId && (
               <button
                 onClick={resetForm}
                 className="px-8 py-3 border-2 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors font-medium"
@@ -541,8 +454,7 @@ const AddProduct = () => {
               onClick={handleSubmit}
               className="px-10 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all font-semibold flex items-center gap-2"
             >
-              <PhotoIcon className="h-5 w-5" />
-              {editingProduct ? "Update Product" : "Save Product"}
+              {editId ? "Update Product" : "Save Product"}
             </button>
           </div>
         </div>
@@ -550,7 +462,8 @@ const AddProduct = () => {
         {/* PRODUCTS LIST */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
           <ProductListPanel
-            onEdit={handleEdit}
+            products={products}
+            onEdit={handleEditClick}
             onDelete={handleDelete}
           />
         </div>
