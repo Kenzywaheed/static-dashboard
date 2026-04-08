@@ -7,6 +7,7 @@ import Layout from './components/Layout/Layout';
 import Dashboard from './pages/Dashboard';
 import OrderManagement from './pages/OrderManagement';
 import AddProduct from './pages/AddProduct';
+import ProductDetails from './pages/ProductDetails';
 import Notifications from './pages/Notifications';
 import Calendar from './pages/Calendar';
 import PaymentWay from './pages/PaymentWay';
@@ -31,7 +32,6 @@ function App() {
           <AuthProvider>
             <Toaster position="top-right" />
             <Routes>
-              {/* Main Layout with all pages */}
               <Route element={<Layout />}>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<Dashboard />} />
@@ -40,8 +40,9 @@ function App() {
                 {/* Add Product Routes */}
                 <Route path="/add-product" element={<AddProduct />} />
                 <Route path="/products/add" element={<AddProduct />} />
-                
-                {/* Add Category Routes */}
+                <Route path="/product-details" element={<ProductDetails />} />
+
+                {/* Category Routes */}
                 <Route path="/add-category" element={<CategoryManager />} />
                 <Route path="/categories" element={<CategoryManager />} />
                 
@@ -52,7 +53,6 @@ function App() {
                 <Route path="/admin-roles" element={<AdminRoles />} />
               </Route>
               
-              {/* Catch all - redirect to dashboard */}
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </AuthProvider>
