@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PlusIcon, TrashIcon, CreditCardIcon } from '@heroicons/react/24/outline';
-import api from '../services/api';
+// import api from '../services/api'; 
 import toast from 'react-hot-toast';
 
 const PaymentWay = () => {

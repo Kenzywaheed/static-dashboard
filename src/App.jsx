@@ -52,7 +52,7 @@ function App() {
                 <Route path="/order-model" element={<OrderModel />} />
                 <Route path="/admin-roles" element={<AdminRoles />} />
               </Route>
-              
+              <Route path="/categories" element={<CategoryManager />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </AuthProvider>

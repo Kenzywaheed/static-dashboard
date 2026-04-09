@@ -433,7 +433,18 @@ app.delete('/api/admins/:id', authenticateToken, (req, res) => {
 
 // Categories routes
 app.get('/api/categories', (req, res) => {
-  res.json(categories);
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const startIndex = (page - 1) * limit;
+  const endIndex = startIndex + limit;
+  const paginatedCategories = categories.slice(startIndex, endIndex);
+  res.json({
+    data: paginatedCategories,
+    total: categories.length,
+    page,
+    totalPages: Math.ceil(categories.length / limit),
+    totalCount: categories.length
+  });
 });
 
 app.post('/api/categories', (req, res) => {
