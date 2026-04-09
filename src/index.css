@@ -17,6 +17,9 @@ body {
 :root {
   --sidebar-bg: #1a1e2b;
   --content-bg: #f8f9fa;
+  --brand-primary: #0f766e;
+  --brand-primary-dark: #115e59;
+  --brand-primary-soft: #ccfbf1;
 }
 
 .sidebar {
@@ -25,6 +28,51 @@ body {
 
 .content {
   background-color: var(--content-bg);
+}
+
+@layer utilities {
+  .bg-sidebar {
+    background-color: var(--sidebar-bg);
+  }
+
+  .bg-blue-500,
+  .bg-blue-600 {
+    background-color: var(--brand-primary);
+  }
+
+  .hover\:bg-blue-600:hover,
+  .hover\:bg-blue-700:hover {
+    background-color: var(--brand-primary-dark);
+  }
+
+  .text-blue-500,
+  .text-blue-600,
+  .text-blue-700 {
+    color: var(--brand-primary);
+  }
+
+  .dark .dark\:text-blue-400 {
+    color: var(--brand-primary-soft);
+  }
+
+  .border-blue-500,
+  .border-blue-600 {
+    border-color: var(--brand-primary);
+  }
+
+  .focus\:border-blue-500:focus {
+    border-color: var(--brand-primary);
+  }
+
+  .focus\:ring-blue-500:focus,
+  .focus\:ring-blue-500\/25:focus,
+  .focus\:ring-blue-500\/30:focus {
+    --tw-ring-color: color-mix(in srgb, var(--brand-primary) 35%, transparent);
+  }
+
+  .bg-blue-50 {
+    background-color: var(--brand-primary-soft);
+  }
 }
 
 /* Custom scrollbar */

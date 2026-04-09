@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import { useLanguage } from '../../hooks/useLanguage';
 
 const Layout = () => {
+  const { isRtl } = useLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     // Check localStorage or system preference
@@ -37,11 +39,11 @@ const Layout = () => {
         />
       )}
 
-      <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <Sidebar isDarkMode={isDarkMode} />
+      <div className={`fixed inset-y-0 z-50 transform transition-transform duration-300 lg:translate-x-0 ${isRtl ? 'right-0' : 'left-0'} ${sidebarOpen ? 'translate-x-0' : isRtl ? 'translate-x-full' : '-translate-x-full'}`}>
+        <Sidebar isDarkMode={isDarkMode} onNavigate={() => setSidebarOpen(false)} />
       </div>
 
-      <div className="lg:ml-64">
+      <div className={isRtl ? 'lg:mr-72' : 'lg:ml-72'}>
         <Header
           toggleSidebar={toggleSidebar}
           isDarkMode={isDarkMode}

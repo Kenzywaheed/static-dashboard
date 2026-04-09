@@ -18,21 +18,22 @@ import {
   TagIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline';
+import { useLanguage } from '../hooks/useLanguage';
 
 // Static data - no API calls
 const staticStats = [
-  { name: 'Total Sales', value: '$125,000', icon: CurrencyDollarIcon, color: 'bg-blue-500' },
-  { name: 'Total Orders', value: '1,250', icon: ShoppingCartIcon, color: 'bg-green-500' },
-  { name: 'Discounted Amount', value: '$12,500', icon: TagIcon, color: 'bg-purple-500' },
-  { name: 'Total Costs', value: '$45,000', icon: UserGroupIcon, color: 'bg-orange-500' },
+  { labelKey: 'totalSales', value: '$125,000', icon: CurrencyDollarIcon, color: 'bg-blue-500' },
+  { labelKey: 'totalOrders', value: '1,250', icon: ShoppingCartIcon, color: 'bg-green-500' },
+  { labelKey: 'discountedAmount', value: '$12,500', icon: TagIcon, color: 'bg-purple-500' },
+  { labelKey: 'totalCosts', value: '$45,000', icon: UserGroupIcon, color: 'bg-orange-500' },
 ];
 
 const staticReports = [
-  { label: 'Customers', value: '850' },
-  { label: 'Total Products', value: '156' },
-  { label: 'Stock Products', value: '120' },
-  { label: 'Out of Stock', value: '36' },
-  { label: 'Revenue', value: '$98,500' },
+  { labelKey: 'customers', value: '850' },
+  { labelKey: 'totalProducts', value: '156' },
+  { labelKey: 'stockProducts', value: '120' },
+  { labelKey: 'outOfStock', value: '36' },
+  { labelKey: 'revenue', value: '$98,500' },
 ];
 
 const staticCategories = [
@@ -54,23 +55,29 @@ const staticUsersStats = [
 ];
 
 const staticTransactions = [
-  { id: 'ORD-001', customer: 'John Doe', date: '2024-01-15', amount: '$125.00', status: 'Completed' },
-  { id: 'ORD-002', customer: 'Jane Smith', date: '2024-01-15', amount: '$89.99', status: 'Processing' },
-  { id: 'ORD-003', customer: 'Mike Johnson', date: '2024-01-14', amount: '$250.00', status: 'Completed' },
-  { id: 'ORD-004', customer: 'Sarah Williams', date: '2024-01-14', amount: '$45.00', status: 'Pending' },
-  { id: 'ORD-005', customer: 'Tom Brown', date: '2024-01-13', amount: '$175.50', status: 'Completed' },
+  { id: 'ORD-001', customer: 'John Doe', date: '2024-01-15', amount: '$125.00', statusKey: 'completed' },
+  { id: 'ORD-002', customer: 'Jane Smith', date: '2024-01-15', amount: '$89.99', statusKey: 'processing' },
+  { id: 'ORD-003', customer: 'Mike Johnson', date: '2024-01-14', amount: '$250.00', statusKey: 'completed' },
+  { id: 'ORD-004', customer: 'Sarah Williams', date: '2024-01-14', amount: '$45.00', statusKey: 'pending' },
+  { id: 'ORD-005', customer: 'Tom Brown', date: '2024-01-13', amount: '$175.50', statusKey: 'completed' },
 ];
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
 
 const Dashboard = () => {
+  const { t } = useLanguage();
+  const pageText = t.dashboard;
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Dashboard</h1>
-          <p className="text-gray-500 dark:text-gray-400">Welcome back! Here's what's happening.</p>
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-3xl">
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-white">{pageText.title}</h1>
+          <p className="mt-2 leading-7 text-gray-500 dark:text-gray-400">{pageText.welcome}</p>
+        </div>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100 lg:max-w-md">
+          <p className="font-bold">{pageText.waitingForApi}</p>
+          <p className="mt-1 leading-6">{pageText.waitingForApiBody}</p>
         </div>
       </div>
 
@@ -80,7 +87,7 @@ const Dashboard = () => {
           <div key={index} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{stat.name}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{pageText[stat.labelKey]}</p>
                 <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">{stat.value}</p>
               </div>
               <div className={`p-3 rounded-lg ${stat.color}`}>
@@ -93,11 +100,11 @@ const Dashboard = () => {
 
       {/* Reports Section */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Reports</h2>
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">{pageText.reports}</h2>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {staticReports.map((report, index) => (
             <div key={index} className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <p className="text-sm text-gray-500 dark:text-gray-400">{report.label}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{pageText[report.labelKey]}</p>
               <p className="text-xl font-bold text-gray-800 dark:text-white mt-1">{report.value}</p>
             </div>
           ))}
@@ -108,7 +115,7 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Selling Categories */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Top Selling Categories</h2>
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">{pageText.topCategories}</h2>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -132,7 +139,7 @@ const Dashboard = () => {
 
         {/* Users Stats */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Users per Minute</h2>
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">{pageText.usersPerMinute}</h2>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={staticUsersStats}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -147,17 +154,17 @@ const Dashboard = () => {
 
       {/* Transactions Table */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Last Transactions</h2>
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">{pageText.lastTransactions}</h2>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200 dark:border-gray-700">
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Order ID</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Customer</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Date</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Amount</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Status</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">Action</th>
+                <th className="text-start py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">{pageText.orderId}</th>
+                <th className="text-start py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">{pageText.customer}</th>
+                <th className="text-start py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">{pageText.date}</th>
+                <th className="text-start py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">{pageText.amount}</th>
+                <th className="text-start py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">{pageText.status}</th>
+                <th className="text-start py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">{pageText.action}</th>
               </tr>
             </thead>
             <tbody>
@@ -169,16 +176,16 @@ const Dashboard = () => {
                   <td className="py-3 px-4 text-sm text-gray-800 dark:text-gray-200">{transaction.amount}</td>
                   <td className="py-3 px-4">
                     <span className={`px-2 py-1 text-xs rounded-full ${
-                      transaction.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                      transaction.status === 'Processing' ? 'bg-blue-100 text-blue-800' :
+                      transaction.statusKey === 'completed' ? 'bg-green-100 text-green-800' :
+                      transaction.statusKey === 'processing' ? 'bg-blue-100 text-blue-800' :
                       'bg-yellow-100 text-yellow-800'
                     }`}>
-                      {transaction.status}
+                      {pageText[transaction.statusKey]}
                     </span>
                   </td>
                   <td className="py-3 px-4">
                     <button className="text-blue-500 hover:text-blue-600 text-sm font-medium">
-                      View Details
+                      {pageText.viewDetails}
                     </button>
                   </td>
                 </tr>

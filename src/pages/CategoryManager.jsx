@@ -1,22 +1,27 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { categoriesAPI } from '../services/endpoints';
+import { useLanguage } from '../hooks/useLanguage';
 
 const PAGE_SIZE = 10;
 
 const EMPTY_CATEGORY_FORM = {
-  name: '',
+  nameEn: '',
+  nameAr: '',
   gender: '',
-  details: '',
+  detailsEn: '',
+  detailsAr: '',
   parentId: '',
   iconFile: null
 };
 
 const mapCategoryFromApi = (category) => ({
   id: category.id,
-  name: category.categoryName,
+  nameEn: category.categoryNameEn || category.categoryName,
+  nameAr: category.categoryNameAr || '',
   gender: category.categoryGender,
-  details: category.categoryDescription || '',
+  detailsEn: category.categoryDescriptionEn || category.categoryDescription || '',
+  detailsAr: category.categoryDescriptionAr || '',
   parentId: category.parentCategoryId || '',
   icon: category.imageUrl || category.categoryIcon || ''
 });
@@ -38,9 +43,13 @@ const getApiErrorMessage = (err, fallbackMessage) => {
 };
 
 const buildCreateCategoryRequest = (form) => ({
-  categoryName: form.name.trim(),
+  categoryName: form.nameEn.trim(),
+  categoryNameEn: form.nameEn.trim(),
+  categoryNameAr: form.nameAr.trim(),
   categoryGender: form.gender,
-  categoryDescription: form.details.trim() || '',
+  categoryDescription: form.detailsEn.trim() || '',
+  categoryDescriptionEn: form.detailsEn.trim() || '',
+  categoryDescriptionAr: form.detailsAr.trim() || '',
   parentCategoryId: form.parentId || null,
   categoryIcon: form.iconFile
 });
@@ -52,6 +61,8 @@ const getPageCount = (data, totalElements) => (
 const getDisplayPage = (page) => page + 1;
 
 const CategoryManager = () => {
+  const { language, t } = useLanguage();
+  const text = t.category;
   const [form, setForm] = useState(EMPTY_CATEGORY_FORM);
 
   const [categories, setCategories] = useState([]);
@@ -68,6 +79,22 @@ const CategoryManager = () => {
 
   const firstCategoryNumber = totalCategories === 0 ? 0 : currentPage * PAGE_SIZE + 1;
   const lastCategoryNumber = Math.min((currentPage + 1) * PAGE_SIZE, totalCategories);
+  const getCategoryName = useCallback((category) => (
+    language === 'ar'
+      ? category.nameAr || category.nameEn
+      : category.nameEn || category.nameAr
+  ), [language]);
+  const getCategoryDetails = useCallback((category) => (
+    language === 'ar'
+      ? category.detailsAr || category.detailsEn
+      : category.detailsEn || category.detailsAr
+  ), [language]);
+  const getDisplayGender = useCallback((gender) => {
+    if (!gender) return text.noGender;
+    if (gender === 'M' || gender === 'MALE') return text.male;
+    if (gender === 'F' || gender === 'FEMALE') return text.female;
+    return formatGender(gender);
+  }, [text.female, text.male, text.noGender]);
 
   // Ask the backend for categories and copy the response into the page state.
   const loadCategories = useCallback(async (page) => {
@@ -84,19 +111,19 @@ const CategoryManager = () => {
       setTotalPages(getPageCount(data, totalElements));
     } catch (err) {
       console.error('Load categories error:', err);
-      setListError('Failed to load categories');
-      toast.error('Failed to load categories');
+      setListError(text.loadFailed);
+      toast.error(text.loadFailed);
     } finally {
       setLoading(false);
     }
-  }, []); 
+  }, [text.loadFailed]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError(null);
 
-    if (!form.name.trim() || !form.gender || !form.iconFile) {
-      const message = 'Name, gender, and icon are required';
+    if (!form.nameEn.trim() || !form.nameAr.trim() || !form.gender || !form.iconFile) {
+      const message = text.requiredError;
 
       setFormError(message);
       toast.error(message);
@@ -110,12 +137,12 @@ const CategoryManager = () => {
 
       setLastCreateRequest(categoryData);
       await categoriesAPI.create(categoryData);
-      toast.success('Category created!');
+      toast.success(text.created);
 
       await loadCategories(currentPage);
       resetForm();
     } catch (err) {
-      const message = getApiErrorMessage(err, 'Failed to save category');
+      const message = getApiErrorMessage(err, text.saveFailed);
 
       console.error('Submit error:', err);
       toast.error(message);
@@ -182,8 +209,8 @@ const CategoryManager = () => {
       <div className="mb-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Category Manager</h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">Create categories and connect them to parent categories.</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{text.title}</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">{text.subtitle}</p>
           </div>
           <button
             type="button"
@@ -191,7 +218,7 @@ const CategoryManager = () => {
             disabled={loading}
             className="self-start sm:self-auto px-5 py-2 bg-gray-900 hover:bg-gray-800 dark:bg-gray-100 dark:hover:bg-white text-white dark:text-gray-900 font-semibold rounded-xl transition-colors disabled:opacity-50"
           >
-            {loading ? 'Refreshing...' : 'Refresh'}
+            {loading ? text.refreshing : text.refresh}
           </button>
         </div>
       </div>
@@ -200,12 +227,12 @@ const CategoryManager = () => {
         {/* Form */}
         <div className="bg-white dark:bg-gray-800 shadow-xl rounded-2xl p-8 border border-gray-200 dark:border-gray-700">
           <h2 className="text-2xl font-semibold mb-6 text-gray-900 dark:text-white">
-            Add Category
+            {text.addTitle}
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Category Icon *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{text.iconLabel}</label>
               <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-900/40">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                   <div className="relative h-28 w-28 flex-shrink-0 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
@@ -224,14 +251,14 @@ const CategoryManager = () => {
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-gray-900 dark:text-white">Upload category artwork</p>
+                    <p className="font-semibold text-gray-900 dark:text-white">{text.uploadTitle}</p>
                     <p className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">
-                      Use a clear square image. This icon appears in the categories list.
+                      {text.uploadHelp}
                     </p>
 
                     <div className="mt-4 flex flex-wrap items-center gap-3">
                       <label className="inline-flex cursor-pointer items-center rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white">
-                        Choose image
+                        {text.chooseImage}
                         <input
                           key={uploadInputKey}
                           type="file"
@@ -243,7 +270,7 @@ const CategoryManager = () => {
                         />
                       </label>
                       <span className="max-w-full truncate text-sm text-gray-600 dark:text-gray-300">
-                        {form.iconFile?.name || 'No image selected'}
+                        {form.iconFile?.name || text.noImage}
                       </span>
                     </div>
                   </div>
@@ -251,25 +278,78 @@ const CategoryManager = () => {
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Name *</label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => updateFormField('name', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
-                placeholder="Category name"
-                disabled={saving}
-                required
-              />
+            <div className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+              <div className="mb-4">
+                <p className="font-semibold text-gray-900 dark:text-white">{text.englishVersion}</p>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{text.englishHelp}</p>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{text.nameEn}</label>
+                  <input
+                    type="text"
+                    value={form.nameEn}
+                    onChange={(e) => updateFormField('nameEn', e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+                    placeholder={text.nameEnPlaceholder}
+                    disabled={saving}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{text.descriptionEn}</label>
+                  <textarea
+                    value={form.detailsEn}
+                    onChange={(e) => updateFormField('detailsEn', e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+                    placeholder={text.descriptionEnPlaceholder}
+                    disabled={saving}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+              <div className="mb-4">
+                <p className="font-semibold text-gray-900 dark:text-white">{text.arabicVersion}</p>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{text.arabicHelp}</p>
+              </div>
+              <div className="space-y-4" dir="rtl">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">الاسم بالعربي *</label>
+                  <input
+                    type="text"
+                    value={form.nameAr}
+                    onChange={(e) => updateFormField('nameAr', e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+                    placeholder={text.nameArPlaceholder}
+                    disabled={saving}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">الوصف بالعربي</label>
+                  <textarea
+                    value={form.detailsAr}
+                    onChange={(e) => updateFormField('detailsAr', e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+                    placeholder={text.descriptionArPlaceholder}
+                    disabled={saving}
+                  />
+                </div>
+              </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Gender *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{text.gender}</label>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: 'Male', value: 'M' },
-                  { label: 'Female', value: 'F' }
+                  { label: text.male, value: 'M' },
+                  { label: text.female, value: 'F' }
                 ].map((option) => {
                   const isSelected = form.gender === option.value;
 
@@ -294,21 +374,9 @@ const CategoryManager = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Details</label>
-              <textarea
-                value={form.details}
-                onChange={(e) => updateFormField('details', e.target.value)}
-                rows={3}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
-                placeholder="Optional description"
-                disabled={saving}
-              />
-            </div>
-
-            <div>
               <div className="mb-2 flex items-center justify-between gap-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Parent Category</label>
-                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Optional</span>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{text.parent}</label>
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{text.optional}</span>
               </div>
 
               <div className="rounded-xl border border-gray-300 bg-white p-3 shadow-sm dark:border-gray-600 dark:bg-gray-700">
@@ -318,17 +386,17 @@ const CategoryManager = () => {
                   className="w-full bg-transparent font-medium text-gray-900 outline-none dark:text-gray-100"
                   disabled={loading || saving}
                 >
-                  <option value="">No parent category</option>
+                  <option value="">{text.noParent}</option>
                   {loading ? (
-                    <option>Loading categories...</option>
+                    <option>{text.loadingCategories}</option>
                   ) : categories.map(cat => (
                     <option key={cat.id} value={cat.id}>
-                      {cat.name} - {formatGender(cat.gender)}
+                      {getCategoryName(cat)} - {getDisplayGender(cat.gender)}
                     </option>
                   ))}
                 </select>
                 <p className="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400">
-                  Leave empty for a main category. Select a parent only when this is a subcategory.
+                  {text.parentHelp}
                 </p>
               </div>
             </div>
@@ -339,15 +407,15 @@ const CategoryManager = () => {
                 disabled={saving}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
               >
-                {saving ? 'Saving...' : 'Create'}
+                {saving ? text.saving : text.create}
               </button>
-              {(form.name || form.gender || form.details || form.parentId) && (
+              {(form.nameEn || form.nameAr || form.gender || form.detailsEn || form.detailsAr || form.parentId) && (
                 <button
                   type="button"
                   onClick={resetForm}
                   className="flex-1 bg-gray-500 hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl"
                 >
-                  Clear
+                  {text.clear}
                 </button>
               )}
             </div>
@@ -363,7 +431,7 @@ const CategoryManager = () => {
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-red-900 dark:text-red-100">Cannot create category</p>
+                  <p className="font-semibold text-red-900 dark:text-red-100">{text.cannotCreate}</p>
                   <p className="mt-1 text-sm leading-6 text-red-800 dark:text-red-200">{formError}</p>
                 </div>
               </div>
@@ -374,7 +442,11 @@ const CategoryManager = () => {
                   <dl className="grid gap-3 text-sm sm:grid-cols-2">
                     <div>
                       <dt className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Name</dt>
-                      <dd className="mt-1 break-words font-medium text-gray-900 dark:text-gray-100">{lastCreateRequest.categoryName}</dd>
+                      <dd className="mt-1 break-words font-medium text-gray-900 dark:text-gray-100">{lastCreateRequest.categoryNameEn}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Name AR</dt>
+                      <dd className="mt-1 break-words font-medium text-gray-900 dark:text-gray-100">{lastCreateRequest.categoryNameAr}</dd>
                     </div>
                     <div>
                       <dt className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Gender</dt>
@@ -388,7 +460,11 @@ const CategoryManager = () => {
                     </div>
                     <div className="sm:col-span-2">
                       <dt className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Description</dt>
-                      <dd className="mt-1 break-words text-gray-800 dark:text-gray-200">{lastCreateRequest.categoryDescription || 'No description'}</dd>
+                      <dd className="mt-1 break-words text-gray-800 dark:text-gray-200">{lastCreateRequest.categoryDescriptionEn || 'No description'}</dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Description AR</dt>
+                      <dd className="mt-1 break-words text-gray-800 dark:text-gray-200">{lastCreateRequest.categoryDescriptionAr || 'No Arabic description'}</dd>
                     </div>
                     <div className="sm:col-span-2">
                       <dt className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Parent</dt>
@@ -412,13 +488,13 @@ const CategoryManager = () => {
           <div className="border-b border-gray-200 bg-gray-50 px-8 py-6 dark:border-gray-700 dark:bg-gray-800/80">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Categories</h2>
+                <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">{text.categories}</h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Showing {firstCategoryNumber}-{lastCategoryNumber} of {totalCategories}
+                  {text.showing} {firstCategoryNumber}-{lastCategoryNumber} {text.of} {totalCategories}
                 </p>
               </div>
               <span className="rounded-xl bg-blue-50 dark:bg-blue-900/30 px-4 py-2 text-sm font-semibold text-blue-700 dark:text-blue-200">
-                Page {getDisplayPage(currentPage)}
+                {text.page} {getDisplayPage(currentPage)}
               </span>
             </div>
           </div>
@@ -435,7 +511,7 @@ const CategoryManager = () => {
                 onClick={() => loadCategories(currentPage)}
                 className="px-6 py-2 bg-red-600 dark:bg-red-500 hover:bg-red-700 dark:hover:bg-red-600 text-white rounded-xl transition-colors shadow-lg"
               >
-                Retry
+                {text.retry}
               </button>
             </div>
           ) : categories.length === 0 ? (
@@ -443,22 +519,22 @@ const CategoryManager = () => {
               <svg className="mx-auto h-16 w-16 text-gray-400 dark:text-gray-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No categories</h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-4">Create your first category above</p>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">{text.noCategories}</h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">{text.noCategoriesHelp}</p>
             </div>
           ) : (
             <div className="space-y-5">
               <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
                 <div className="hidden bg-gray-50 px-5 py-3 text-xs font-semibold uppercase text-gray-500 dark:bg-gray-900/60 dark:text-gray-400 sm:grid sm:grid-cols-[minmax(0,1fr)_120px] sm:gap-4">
-                  <span>Category</span>
-                  <span>Gender</span>
+                  <span>{text.category}</span>
+                  <span>{text.gender.replace(' *', '')}</span>
                 </div>
                 <div className="divide-y divide-gray-200 dark:divide-gray-700">
                   {categories.map((cat) => (
                     <div key={cat.id} className="grid gap-4 px-5 py-5 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/40 sm:grid-cols-[minmax(0,1fr)_120px] sm:items-center">
                       <div className="flex min-w-0 gap-4">
                         <div className="relative flex h-14 w-14 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-blue-50 text-base font-bold text-blue-700 ring-1 ring-gray-200 dark:bg-blue-900/40 dark:text-blue-100 dark:ring-gray-700">
-                          {cat.name?.charAt(0)?.toUpperCase() || 'C'}
+                          {getCategoryName(cat)?.charAt(0)?.toUpperCase() || 'C'}
                           {cat.icon && (
                             <img
                               src={cat.icon}
@@ -472,16 +548,21 @@ const CategoryManager = () => {
                         </div>
 
                         <div className="min-w-0">
-                          <h3 className="truncate text-base font-semibold text-gray-900 dark:text-white">{cat.name}</h3>
+                          <h3 className="truncate text-base font-semibold text-gray-900 dark:text-white">{getCategoryName(cat)}</h3>
+                          {cat.nameAr && cat.nameEn && (
+                            <p className="mt-0.5 truncate text-xs font-medium text-gray-400">
+                              {language === 'ar' ? cat.nameEn : cat.nameAr}
+                            </p>
+                          )}
                           <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-300">
-                            {cat.details || 'No description added yet.'}
+                            {getCategoryDetails(cat) || text.noDescription}
                           </p>
                         </div>
                       </div>
 
                       <div className="sm:text-right">
                         <span className="inline-flex rounded bg-gray-200 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-200">
-                          {formatGender(cat.gender)}
+                          {getDisplayGender(cat.gender)}
                         </span>
                       </div>
                     </div>
@@ -497,11 +578,11 @@ const CategoryManager = () => {
                       disabled={currentPage === 0}
                       className="px-6 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]"
                     >
-                      Previous
+                      {text.previous}
                     </button>
                     <div className="text-center">
                       <div className="text-lg font-semibold text-gray-900 dark:text-white">
-                        Page <span className="text-blue-600 dark:text-blue-400">{getDisplayPage(currentPage)}</span> of {totalPages}
+                        {text.page} <span className="text-blue-600 dark:text-blue-400">{getDisplayPage(currentPage)}</span> {text.of} {totalPages}
                       </div>
                     </div>
                     <button
@@ -509,7 +590,7 @@ const CategoryManager = () => {
                       disabled={currentPage >= totalPages - 1}
                       className="px-6 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]"
                     >
-                      Next
+                      {text.next}
                     </button>
                   </div>
                 </div>
