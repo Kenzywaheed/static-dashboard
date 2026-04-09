@@ -433,16 +433,19 @@ app.delete('/api/admins/:id', authenticateToken, (req, res) => {
 
 // Categories routes
 app.get('/api/categories', (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
-  const startIndex = (page - 1) * limit;
-  const endIndex = startIndex + limit;
+  const page = parseInt(req.query.page) || 1; // بدل page
+  const size = parseInt(req.query.size) || 10;    // بدل limit
+
+  const startIndex = (page - 1) * size;
+  const endIndex = startIndex + size;
+
   const paginatedCategories = categories.slice(startIndex, endIndex);
+
   res.json({
     data: paginatedCategories,
     total: categories.length,
-    page,
-    totalPages: Math.ceil(categories.length / limit),
+    page: page,
+    totalPages: Math.ceil(categories.length / size),
     totalCount: categories.length
   });
 });
