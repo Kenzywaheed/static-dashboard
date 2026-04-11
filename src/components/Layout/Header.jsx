@@ -101,20 +101,20 @@ const Header = ({ toggleSidebar, isDarkMode, setIsDarkMode }) => {
             aria-label={t.header.notifications}
           >
             <BellIcon className="h-5 w-5" />
-            <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />
+            <span className={`absolute top-1 h-2 w-2 rounded-full bg-red-500 ${isRtl ? 'left-1' : 'right-1'}`} />
           </button>
 
           <div className="relative" ref={dropdownRef}>
             <button
               type="button"
               onClick={() => setShowDropdown((current) => !current)}
-              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-2 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:hover:bg-gray-800"
+              className={`flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-2 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:hover:bg-gray-800 ${isRtl ? 'flex-row-reverse' : ''}`}
               aria-label={t.header.profile}
             >
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
                 <span className="text-sm font-bold text-white">{userInitial}</span>
               </div>
-              <div className="hidden text-start md:block">
+              <div className={`hidden md:block ${isRtl ? 'text-right' : 'text-start'}`}>
                 <p className="max-w-[140px] truncate text-sm font-semibold text-gray-900 dark:text-white">
                   {user?.name || t.app.shortName}
                 </p>
@@ -124,9 +124,9 @@ const Header = ({ toggleSidebar, isDarkMode, setIsDarkMode }) => {
             </button>
 
             {showDropdown && (
-              <div className={`absolute mt-3 w-72 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl shadow-gray-950/10 dark:border-gray-700 dark:bg-gray-950 dark:shadow-black/40 ${isRtl ? 'left-0' : 'right-0'}`}>
+              <div className={`absolute end-0 mt-3 w-72 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl shadow-gray-950/10 dark:border-gray-700 dark:bg-gray-950 dark:shadow-black/40 ${isRtl ? 'text-right' : 'text-left'}`}>
                 <div className="border-b border-gray-200 p-4 dark:border-gray-800">
-                  <div className="flex items-start gap-3">
+                  <div className={`flex items-start gap-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
                     <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600">
                       <span className="font-bold text-white">{userInitial}</span>
                     </div>
@@ -144,7 +144,7 @@ const Header = ({ toggleSidebar, isDarkMode, setIsDarkMode }) => {
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-2 px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950"
+                  className={`flex w-full items-center gap-2 px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950 ${isRtl ? 'flex-row-reverse justify-end' : ''}`}
                 >
                   <ArrowRightOnRectangleIcon className={`h-5 w-5 ${isRtl ? 'rotate-180' : ''}`} />
                   {t.auth.logout}

@@ -1,7 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import {
+  Bars3Icon,
+  ChevronDownIcon,
+  EyeIcon,
+  PencilSquareIcon,
+  PhotoIcon,
+  RectangleStackIcon,
+  TrashIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline';
 import { categoriesAPI } from '../services/endpoints';
 import { useLanguage } from '../hooks/useLanguage';
+import { useAuth } from '../hooks/useAuth';
 
 const PAGE_SIZE = 10;
 
@@ -12,594 +23,683 @@ const EMPTY_CATEGORY_FORM = {
   detailsEn: '',
   detailsAr: '',
   parentId: '',
-  iconFile: null
+  iconFile: null,
 };
 
 const mapCategoryFromApi = (category) => ({
   id: category.id,
-  nameEn: category.categoryNameEn || category.categoryName,
+  nameEn: category.categoryNameEn || category.categoryName || '',
   nameAr: category.categoryNameAr || '',
-  gender: category.categoryGender,
+  gender: category.categoryGender || '',
   detailsEn: category.categoryDescriptionEn || category.categoryDescription || '',
   detailsAr: category.categoryDescriptionAr || '',
   parentId: category.parentCategoryId || '',
-  icon: category.imageUrl || category.categoryIcon || ''
+  icon: category.imageUrl || category.categoryIcon || '',
 });
 
-const formatGender = (gender) => {
-  if (!gender) return 'No gender';
+const findFirstArrayInObject = (value, seen = new Set()) => {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== 'object' || seen.has(value)) return null;
 
-  return gender.charAt(0).toUpperCase() + gender.slice(1).toLowerCase();
+  seen.add(value);
+
+  for (const nestedValue of Object.values(value)) {
+    const match = findFirstArrayInObject(nestedValue, seen);
+    if (match) return match;
+  }
+
+  return null;
+};
+
+const normalizeCategoriesResponse = (data) => {
+  const content = [
+    data?.content,
+    data?.categories,
+    data?.data?.content,
+    data?.data?.categories,
+    data?.items,
+    data?.result,
+    findFirstArrayInObject(data),
+    Array.isArray(data) ? data : null,
+  ].find(Array.isArray) || [];
+
+  const totalElements = [
+    data?.totalElements,
+    data?.total,
+    data?.count,
+    data?.data?.totalElements,
+    data?.data?.total,
+    content.length,
+  ].find((value) => typeof value === 'number') || 0;
+
+  const totalPages = [
+    data?.totalPages,
+    data?.pages,
+    data?.data?.totalPages,
+    Math.max(Math.ceil((totalElements || content.length) / PAGE_SIZE), 1),
+  ].find((value) => typeof value === 'number') || 1;
+
+  return { content, totalElements, totalPages };
 };
 
 const getApiErrorMessage = (err, fallbackMessage) => {
   const responseData = err.response?.data;
-
-  if (typeof responseData === 'string') {
-    return responseData;
-  }
-
+  if (typeof responseData === 'string') return responseData;
   return responseData?.message || responseData?.error || fallbackMessage;
 };
 
 const buildCreateCategoryRequest = (form) => ({
-  categoryName: form.nameEn.trim(),
   categoryNameEn: form.nameEn.trim(),
   categoryNameAr: form.nameAr.trim(),
   categoryGender: form.gender,
-  categoryDescription: form.detailsEn.trim() || '',
-  categoryDescriptionEn: form.detailsEn.trim() || '',
-  categoryDescriptionAr: form.detailsAr.trim() || '',
+  categoryDescriptionEn: form.detailsEn.trim(),
+  categoryDescriptionAr: form.detailsAr.trim(),
   parentCategoryId: form.parentId || null,
-  categoryIcon: form.iconFile
+  categoryIcon: form.iconFile,
 });
 
-const getPageCount = (data, totalElements) => (
-  data.totalPages || Math.max(Math.ceil(totalElements / PAGE_SIZE), 1)
-);
+const buildUpdateCategoryRequest = (form) => ({
+  categoryNameEn: form.nameEn.trim(),
+  categoryNameAr: form.nameAr.trim(),
+  categoryDescriptionEn: form.detailsEn.trim(),
+  categoryDescriptionAr: form.detailsAr.trim(),
+  parentCategoryId: form.parentId || null,
+  imageIcon: form.iconFile || undefined,
+});
 
-const getDisplayPage = (page) => page + 1;
+const revokePreviewIfNeeded = (preview) => {
+  if (preview?.startsWith('blob:')) URL.revokeObjectURL(preview);
+};
 
 const CategoryManager = () => {
-  const { language, t } = useLanguage();
+  const { t, language } = useLanguage();
+  const { user } = useAuth();
   const text = t.category;
-  const [form, setForm] = useState(EMPTY_CATEGORY_FORM);
+  const brandId = user?.id || '';
 
+  const [step, setStep] = useState('builder');
+  const [form, setForm] = useState(EMPTY_CATEGORY_FORM);
   const [categories, setCategories] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
-  const [totalCategories, setTotalCategories] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [totalCategories, setTotalCategories] = useState(0);
+  const [editingCategoryId, setEditingCategoryId] = useState('');
+  const [expandedCategoryId, setExpandedCategoryId] = useState(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState('');
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [listError, setListError] = useState(null);
-  const [formError, setFormError] = useState(null);
-  const [lastCreateRequest, setLastCreateRequest] = useState(null);
+  const [deletingId, setDeletingId] = useState('');
+  const [listError, setListError] = useState('');
+  const [formError, setFormError] = useState('');
   const [iconPreview, setIconPreview] = useState('');
   const [uploadInputKey, setUploadInputKey] = useState(0);
 
-  const firstCategoryNumber = totalCategories === 0 ? 0 : currentPage * PAGE_SIZE + 1;
-  const lastCategoryNumber = Math.min((currentPage + 1) * PAGE_SIZE, totalCategories);
+  const isEditing = Boolean(editingCategoryId);
+
   const getCategoryName = useCallback((category) => (
-    language === 'ar'
-      ? category.nameAr || category.nameEn
-      : category.nameEn || category.nameAr
+    language === 'ar' ? category.nameAr || category.nameEn : category.nameEn || category.nameAr
   ), [language]);
+
   const getCategoryDetails = useCallback((category) => (
-    language === 'ar'
-      ? category.detailsAr || category.detailsEn
-      : category.detailsEn || category.detailsAr
+    language === 'ar' ? category.detailsAr || category.detailsEn : category.detailsEn || category.detailsAr
   ), [language]);
+
   const getDisplayGender = useCallback((gender) => {
     if (!gender) return text.noGender;
     if (gender === 'M' || gender === 'MALE') return text.male;
     if (gender === 'F' || gender === 'FEMALE') return text.female;
-    return formatGender(gender);
+    return gender;
   }, [text.female, text.male, text.noGender]);
 
-  // Ask the backend for categories and copy the response into the page state.
-  const loadCategories = useCallback(async (page) => {
-    setLoading(true);
-    setListError(null);
-    try {
-      const response = await categoriesAPI.getAll(page, PAGE_SIZE);
-      const data = response.data;
-      const totalElements = data.totalElements || 0;
+  const selectedCategory = useMemo(
+    () => categories.find((category) => category.id === selectedCategoryId) || null,
+    [categories, selectedCategoryId],
+  );
 
-      setCategories((data.content || []).map(mapCategoryFromApi));
+  const getParentCategoryName = useCallback((parentId) => {
+    const parent = categories.find((category) => category.id === parentId);
+    return parent ? getCategoryName(parent) : text.noParent;
+  }, [categories, getCategoryName, text.noParent]);
+
+  const stats = useMemo(() => ({
+    total: totalCategories,
+    root: categories.filter((category) => !category.parentId).length,
+    sub: categories.filter((category) => category.parentId).length,
+    male: categories.filter((category) => category.gender === 'M' || category.gender === 'MALE').length,
+  }), [categories, totalCategories]);
+
+  const resetForm = useCallback(() => {
+    setForm(EMPTY_CATEGORY_FORM);
+    setEditingCategoryId('');
+    setFormError('');
+    setIconPreview((currentPreview) => {
+      revokePreviewIfNeeded(currentPreview);
+      return '';
+    });
+    setUploadInputKey((currentKey) => currentKey + 1);
+  }, []);
+
+  const loadCategories = useCallback(async (page) => {
+    if (!brandId) {
+      setListError(text.brandRequired);
+      return;
+    }
+
+    setLoading(true);
+    setListError('');
+
+    try {
+      const { data } = await categoriesAPI.getAll({ brandId, page, size: PAGE_SIZE });
+      const normalized = normalizeCategoriesResponse(data);
+      const mappedCategories = normalized.content.map(mapCategoryFromApi);
+
+      setCategories(mappedCategories);
       setCurrentPage(page);
-      setTotalCategories(totalElements);
-      setTotalPages(getPageCount(data, totalElements));
+      setTotalPages(normalized.totalPages);
+      setTotalCategories(normalized.totalElements);
+
+      if (mappedCategories.length === 0) {
+        setSelectedCategoryId('');
+        setExpandedCategoryId(null);
+        setDetailsOpen(false);
+        return;
+      }
+
+      setSelectedCategoryId((currentSelectedId) => (
+        mappedCategories.some((category) => category.id === currentSelectedId)
+          ? currentSelectedId
+          : mappedCategories[0].id
+      ));
+
+      setExpandedCategoryId((currentExpandedId) => (
+        mappedCategories.some((category) => category.id === currentExpandedId)
+          ? currentExpandedId
+          : mappedCategories[0].id
+      ));
     } catch (err) {
-      console.error('Load categories error:', err);
-      setListError(text.loadFailed);
-      toast.error(text.loadFailed);
+      const message = getApiErrorMessage(err, text.loadFailed);
+      setListError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
-  }, [text.loadFailed]);
+  }, [brandId, text.brandRequired, text.loadFailed]);
+
+  useEffect(() => {
+    loadCategories(0);
+  }, [loadCategories]);
+
+  useEffect(() => () => revokePreviewIfNeeded(iconPreview), [iconPreview]);
+
+  const updateFormField = (field, value) => {
+    setForm((currentForm) => ({ ...currentForm, [field]: value }));
+  };
+
+  const handleIconChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    updateFormField('iconFile', file);
+    setIconPreview((currentPreview) => {
+      revokePreviewIfNeeded(currentPreview);
+      return file ? URL.createObjectURL(file) : '';
+    });
+  };
+
+  const openCategoryDetails = (category) => {
+    setSelectedCategoryId(category.id);
+    setDetailsOpen(true);
+  };
+
+  const startEditingCategory = (category) => {
+    setEditingCategoryId(category.id);
+    setForm({
+      nameEn: category.nameEn || '',
+      nameAr: category.nameAr || '',
+      gender: category.gender || '',
+      detailsEn: category.detailsEn || '',
+      detailsAr: category.detailsAr || '',
+      parentId: category.parentId || '',
+      iconFile: null,
+    });
+    setIconPreview((currentPreview) => {
+      revokePreviewIfNeeded(currentPreview);
+      return category.icon || '';
+    });
+    setExpandedCategoryId(category.id);
+    setSelectedCategoryId(category.id);
+    setDetailsOpen(false);
+    setStep('builder');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setFormError(null);
+    setFormError('');
 
-    if (!form.nameEn.trim() || !form.nameAr.trim() || !form.gender || !form.iconFile) {
-      const message = text.requiredError;
+    if (!form.nameEn.trim() || !form.nameAr.trim()) {
+      setFormError(text.requiredNamesError);
+      toast.error(text.requiredNamesError);
+      return;
+    }
 
-      setFormError(message);
-      toast.error(message);
+    if (!isEditing && (!form.gender || !form.iconFile)) {
+      setFormError(text.requiredCreateError);
+      toast.error(text.requiredCreateError);
       return;
     }
 
     setSaving(true);
 
     try {
-      const categoryData = buildCreateCategoryRequest(form);
-
-      setLastCreateRequest(categoryData);
-      await categoriesAPI.create(categoryData);
-      toast.success(text.created);
+      if (isEditing) {
+        await categoriesAPI.update(editingCategoryId, buildUpdateCategoryRequest(form));
+        toast.success(text.updated);
+      } else {
+        await categoriesAPI.create(buildCreateCategoryRequest(form));
+        toast.success(text.created);
+      }
 
       await loadCategories(currentPage);
       resetForm();
+      setStep('explorer');
     } catch (err) {
-      const message = getApiErrorMessage(err, text.saveFailed);
-
-      console.error('Submit error:', err);
-      toast.error(message);
+      const message = getApiErrorMessage(err, isEditing ? text.updateFailed : text.saveFailed);
       setFormError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
-  }; 
+  };
 
-  const resetForm = () => {
-    setForm(EMPTY_CATEGORY_FORM);
-    setFormError(null);
-    setLastCreateRequest(null);
-    setIconPreview((currentPreview) => {
-      if (currentPreview) {
-        URL.revokeObjectURL(currentPreview);
+  const handleDelete = async (category) => {
+    if (!window.confirm(text.deleteConfirm.replace('{name}', getCategoryName(category)))) return;
+
+    setDeletingId(category.id);
+
+    try {
+      await categoriesAPI.remove(category.id);
+      toast.success(text.deleted);
+      if (editingCategoryId === category.id) resetForm();
+      if (selectedCategoryId === category.id) {
+        setDetailsOpen(false);
+        setSelectedCategoryId('');
       }
-
-      return '';
-    });
-    setUploadInputKey((currentKey) => currentKey + 1);
-  };
-
-  const updateFormField = (field, value) => {
-    setForm((currentForm) => ({
-      ...currentForm,
-      [field]: value
-    }));
-  };
-
-  const handleIconChange = (e) => {
-    const file = e.target.files?.[0] || null;
-
-    updateFormField('iconFile', file);
-    setIconPreview((currentPreview) => {
-      if (currentPreview) {
-        URL.revokeObjectURL(currentPreview);
-      }
-
-      return file ? URL.createObjectURL(file) : '';
-    });
-  };
-
-  const handlePageChange = (newPage) => {
-    if (newPage >= 0 && newPage < totalPages) {
-      loadCategories(newPage);
+      await loadCategories(categories.length === 1 && currentPage > 0 ? currentPage - 1 : currentPage);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, text.deleteFailed));
+    } finally {
+      setDeletingId('');
     }
   };
-
-  useEffect(() => {
-    loadCategories(0);
-  }, [loadCategories]);
-
-  useEffect(() => (
-    () => {
-      if (iconPreview) {
-        URL.revokeObjectURL(iconPreview);
-      }
-    }
-  ), [iconPreview]);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto dark:bg-gray-900">
-      <div className="mb-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="space-y-8">
+      <section className="overflow-hidden rounded-[32px] border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-blue-50/80 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900">
+        <div className="grid gap-8 px-6 py-7 lg:grid-cols-[minmax(0,1fr)_280px] lg:px-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{text.title}</h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">{text.subtitle}</p>
+            <p className="text-sm font-bold uppercase tracking-[0.24em] text-blue-600 dark:text-blue-400">{text.workflow}</p>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">{text.title}</h1>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600 dark:text-slate-300">{text.subtitle}</p>
+            <div className="mt-5 flex flex-wrap items-center gap-3 text-sm">
+              <span className="rounded-full border border-slate-200 bg-white/80 px-4 py-2 font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">
+                {text.brandBadge}: {brandId || text.brandMissing}
+              </span>
+              {isEditing && (
+                <span className="rounded-full border border-blue-200 bg-blue-100 px-4 py-2 font-semibold text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
+                  {text.editingBadge}
+                </span>
+              )}
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => loadCategories(currentPage)}
-            disabled={loading}
-            className="self-start sm:self-auto px-5 py-2 bg-gray-900 hover:bg-gray-800 dark:bg-gray-100 dark:hover:bg-white text-white dark:text-gray-900 font-semibold rounded-xl transition-colors disabled:opacity-50"
-          >
-            {loading ? text.refreshing : text.refresh}
-          </button>
+
+          <div className="grid gap-3 self-start">
+            <button
+              type="button"
+              onClick={() => {
+                resetForm();
+                setStep('builder');
+              }}
+              className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+            >
+              {text.newCategory}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStep('explorer');
+                if (selectedCategory) setDetailsOpen(true);
+              }}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+            >
+              <Bars3Icon className="h-5 w-5" />
+              {text.viewerTitle}
+            </button>
+          </div>
         </div>
+      </section>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard label={text.categories} value={stats.total} tone="blue" />
+        <StatCard label={text.noParent} value={stats.root} tone="slate" />
+        <StatCard label={text.subcategories} value={stats.sub} tone="green" />
+        <StatCard label={text.male} value={stats.male} tone="amber" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Form */}
-        <div className="bg-white dark:bg-gray-800 shadow-xl rounded-2xl p-8 border border-gray-200 dark:border-gray-700">
-          <h2 className="text-2xl font-semibold mb-6 text-gray-900 dark:text-white">
-            {text.addTitle}
-          </h2>
+      <div className="grid gap-4 md:grid-cols-2">
+        {[
+          { id: 'builder', label: text.builderStep, help: text.builderHelp },
+          { id: 'explorer', label: text.explorerStep, help: text.explorerHelp },
+        ].map((navStep) => (
+          <button
+            key={navStep.id}
+            type="button"
+            onClick={() => setStep(navStep.id)}
+            className={`rounded-3xl border p-5 text-start transition ${
+              step === navStep.id
+                ? 'border-blue-200 bg-blue-50 text-blue-900 shadow-sm dark:border-blue-900 dark:bg-blue-950 dark:text-blue-100'
+                : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'
+            }`}
+          >
+            <p className="font-bold">{navStep.label}</p>
+            <p className="mt-2 text-sm leading-6 opacity-80">{navStep.help}</p>
+          </button>
+        ))}
+      </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{text.iconLabel}</label>
-              <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-900/40">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <div className="relative h-28 w-28 flex-shrink-0 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
-                    {iconPreview ? (
-                      <img src={iconPreview} alt="Category icon preview" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full flex-col items-center justify-center text-gray-400">
-                        <svg className="h-9 w-9" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 16.5V7.5A2.5 2.5 0 0 1 5.5 5h13A2.5 2.5 0 0 1 21 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="m3 16 4.5-4.5a2 2 0 0 1 2.8 0L13 14m0 0 1-1a2 2 0 0 1 2.8 0L21 17m-8-3 2 2" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.5 8.5h.01" />
-                        </svg>
-                        <span className="mt-2 text-xs font-semibold">Icon</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-gray-900 dark:text-white">{text.uploadTitle}</p>
-                    <p className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">
-                      {text.uploadHelp}
-                    </p>
-
-                    <div className="mt-4 flex flex-wrap items-center gap-3">
-                      <label className="inline-flex cursor-pointer items-center rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white">
-                        {text.chooseImage}
-                        <input
-                          key={uploadInputKey}
-                          type="file"
-                          accept="image/*"
-                          onChange={handleIconChange}
-                          disabled={saving}
-                          className="sr-only"
-                          required
-                        />
-                      </label>
-                      <span className="max-w-full truncate text-sm text-gray-600 dark:text-gray-300">
-                        {form.iconFile?.name || text.noImage}
-                      </span>
-                    </div>
-                  </div>
+      {step === 'builder' && (
+        <section className="grid gap-8 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="group relative aspect-square w-full overflow-hidden rounded-[24px] bg-slate-100 dark:bg-slate-950">
+              {iconPreview ? (
+                <img src={iconPreview} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
+                  <PhotoIcon className="h-12 w-12" />
+                  <span className="font-semibold">{text.uploadTitle}</span>
                 </div>
+              )}
+              <div className="absolute inset-x-0 bottom-0 bg-slate-950/70 px-4 py-3 text-sm font-bold text-white opacity-0 transition group-hover:opacity-100">
+                {isEditing ? text.changeImage : text.chooseImage}
               </div>
             </div>
+            <label className="mt-5 inline-flex cursor-pointer items-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700">
+              {isEditing ? text.changeImage : text.chooseImage}
+              <input key={uploadInputKey} type="file" accept="image/*" onChange={handleIconChange} disabled={saving} className="hidden" required={!isEditing} />
+            </label>
+            <p className="mt-4 text-sm leading-6 text-slate-500 dark:text-slate-400">{isEditing ? text.uploadEditHelp : text.uploadHelp}</p>
+          </div>
 
-            <div className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
-              <div className="mb-4">
-                <p className="font-semibold text-gray-900 dark:text-white">{text.englishVersion}</p>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{text.englishHelp}</p>
+          <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-950 dark:text-white">{isEditing ? text.editTitle : text.addTitle}</h2>
+                <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">{isEditing ? text.editSubtitle : text.addSubtitle}</p>
               </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{text.nameEn}</label>
-                  <input
-                    type="text"
-                    value={form.nameEn}
-                    onChange={(e) => updateFormField('nameEn', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
-                    placeholder={text.nameEnPlaceholder}
-                    disabled={saving}
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{text.descriptionEn}</label>
-                  <textarea
-                    value={form.detailsEn}
-                    onChange={(e) => updateFormField('detailsEn', e.target.value)}
-                    rows={3}
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
-                    placeholder={text.descriptionEnPlaceholder}
-                    disabled={saving}
-                  />
-                </div>
-              </div>
+              {isEditing && (
+                <button type="button" onClick={resetForm} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
+                  {text.cancelEdit}
+                </button>
+              )}
             </div>
 
-            <div className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
-              <div className="mb-4">
-                <p className="font-semibold text-gray-900 dark:text-white">{text.arabicVersion}</p>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{text.arabicHelp}</p>
-              </div>
-              <div className="space-y-4" dir="rtl">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">الاسم بالعربي *</label>
-                  <input
-                    type="text"
-                    value={form.nameAr}
-                    onChange={(e) => updateFormField('nameAr', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
-                    placeholder={text.nameArPlaceholder}
-                    disabled={saving}
-                    required
-                  />
-                </div>
+            <form onSubmit={handleSubmit} className="grid gap-5 md:grid-cols-2">
+              <label className="block">
+                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.nameEn}</span>
+                <input value={form.nameEn} onChange={(e) => updateFormField('nameEn', e.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder={text.nameEnPlaceholder} />
+              </label>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">الوصف بالعربي</label>
-                  <textarea
-                    value={form.detailsAr}
-                    onChange={(e) => updateFormField('detailsAr', e.target.value)}
-                    rows={3}
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
-                    placeholder={text.descriptionArPlaceholder}
-                    disabled={saving}
-                  />
-                </div>
-              </div>
-            </div>
+              <label className="block">
+                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.nameAr}</span>
+                <input value={form.nameAr} onChange={(e) => updateFormField('nameAr', e.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder={text.nameArPlaceholder} />
+              </label>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{text.gender}</label>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: text.male, value: 'M' },
-                  { label: text.female, value: 'F' }
-                ].map((option) => {
-                  const isSelected = form.gender === option.value;
+              <label className="block md:col-span-2">
+                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.descriptionEn}</span>
+                <textarea value={form.detailsEn} onChange={(e) => updateFormField('detailsEn', e.target.value)} rows={4} className="mt-2 w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder={text.descriptionEnPlaceholder} />
+              </label>
 
-                  return (
+              <label className="block md:col-span-2">
+                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.descriptionAr}</span>
+                <textarea value={form.detailsAr} onChange={(e) => updateFormField('detailsAr', e.target.value)} rows={4} className="mt-2 w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder={text.descriptionArPlaceholder} />
+              </label>
+
+              <div className="block">
+                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.gender}</span>
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  {[{ label: text.male, value: 'M' }, { label: text.female, value: 'F' }].map((option) => (
                     <button
                       key={option.value}
                       type="button"
                       onClick={() => updateFormField('gender', option.value)}
-                      disabled={saving}
-                      className={`rounded-xl border px-4 py-3 text-left font-semibold transition-all disabled:opacity-50 ${
-                        isSelected
-                          ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm dark:border-blue-400 dark:bg-blue-900/40 dark:text-blue-100'
-                          : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50/60 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:border-blue-500'
-                      }`}
+                      disabled={saving || isEditing}
+                      className={`rounded-lg border px-4 py-3 text-sm font-bold transition ${form.gender === option.value ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-950 dark:text-blue-100' : 'border-gray-300 text-gray-700 hover:border-blue-300 dark:border-gray-700 dark:text-gray-200'} disabled:opacity-50`}
                     >
                       {option.label}
                     </button>
-                  );
-                })}
-              </div>
-              <input className="sr-only" value={form.gender} onChange={() => {}} required />
-            </div>
-
-            <div>
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{text.parent}</label>
-                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{text.optional}</span>
+                  ))}
+                </div>
               </div>
 
-              <div className="rounded-xl border border-gray-300 bg-white p-3 shadow-sm dark:border-gray-600 dark:bg-gray-700">
-                <select
-                  value={form.parentId}
-                  onChange={(e) => updateFormField('parentId', e.target.value)}
-                  className="w-full bg-transparent font-medium text-gray-900 outline-none dark:text-gray-100"
-                  disabled={loading || saving}
-                >
+              <label className="block">
+                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.parent}</span>
+                <select value={form.parentId} onChange={(e) => updateFormField('parentId', e.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white">
                   <option value="">{text.noParent}</option>
-                  {loading ? (
-                    <option>{text.loadingCategories}</option>
-                  ) : categories.map(cat => (
-                    <option key={cat.id} value={cat.id}>
-                      {getCategoryName(cat)} - {getDisplayGender(cat.gender)}
-                    </option>
+                  {categories.filter((category) => category.id !== editingCategoryId).map((category) => (
+                    <option key={category.id} value={category.id}>{getCategoryName(category)}</option>
                   ))}
                 </select>
-                <p className="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400">
-                  {text.parentHelp}
-                </p>
-              </div>
-            </div>
+              </label>
 
-            <div className="flex gap-4">
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-              >
-                {saving ? text.saving : text.create}
-              </button>
-              {(form.nameEn || form.nameAr || form.gender || form.detailsEn || form.detailsAr || form.parentId) && (
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="flex-1 bg-gray-500 hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl"
-                >
+              {formError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200 md:col-span-2">
+                  {formError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 md:col-span-2">
+                <button type="button" onClick={resetForm} className="rounded-lg border border-gray-300 px-5 py-3 text-sm font-bold text-gray-800 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800">
                   {text.clear}
                 </button>
-              )}
-            </div>
-          </form>
-
-          {formError && (
-            <div className="mt-6 rounded-xl border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 p-5">
-              <div className="flex gap-3">
-                <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-red-100 dark:bg-red-900/60 text-red-700 dark:text-red-200">
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                  </svg>
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-red-900 dark:text-red-100">{text.cannotCreate}</p>
-                  <p className="mt-1 text-sm leading-6 text-red-800 dark:text-red-200">{formError}</p>
-                </div>
+                <button type="submit" disabled={saving} className="rounded-lg bg-blue-600 px-7 py-3 font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50">
+                  {saving ? text.saving : isEditing ? text.update : text.create}
+                </button>
               </div>
+            </form>
+          </div>
+        </section>
+      )}
 
-              {lastCreateRequest && (
-                <div className="mt-4 rounded-xl border border-red-200/80 dark:border-red-800/70 bg-white/80 dark:bg-gray-950/80 p-4">
-                  <p className="mb-3 text-xs font-semibold uppercase text-red-700 dark:text-red-200">Request sent</p>
-                  <dl className="grid gap-3 text-sm sm:grid-cols-2">
-                    <div>
-                      <dt className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Name</dt>
-                      <dd className="mt-1 break-words font-medium text-gray-900 dark:text-gray-100">{lastCreateRequest.categoryNameEn}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Name AR</dt>
-                      <dd className="mt-1 break-words font-medium text-gray-900 dark:text-gray-100">{lastCreateRequest.categoryNameAr}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Gender</dt>
-                      <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">{lastCreateRequest.categoryGender}</dd>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <dt className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Icon</dt>
-                      <dd className="mt-1 break-words text-gray-800 dark:text-gray-200">
-                        {lastCreateRequest.categoryIcon?.name || 'No icon selected'}
-                      </dd>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <dt className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Description</dt>
-                      <dd className="mt-1 break-words text-gray-800 dark:text-gray-200">{lastCreateRequest.categoryDescriptionEn || 'No description'}</dd>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <dt className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Description AR</dt>
-                      <dd className="mt-1 break-words text-gray-800 dark:text-gray-200">{lastCreateRequest.categoryDescriptionAr || 'No Arabic description'}</dd>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <dt className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Parent</dt>
-                      <dd className="mt-1 break-all text-gray-800 dark:text-gray-200">{lastCreateRequest.parentCategoryId || 'No parent category'}</dd>
-                    </div>
-                  </dl>
-                </div>
-              )}
-            </div>
-          )}
-
-          {listError && (
-            <div className="mt-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl">
-              <p className="text-red-800 dark:text-red-200 font-medium">{listError}</p>
-            </div>
-          )}
-        </div>
-
-        {/* List */}
-        <div className="overflow-hidden bg-white dark:bg-gray-800 shadow-xl rounded-2xl border border-gray-200 dark:border-gray-700">
-          <div className="border-b border-gray-200 bg-gray-50 px-8 py-6 dark:border-gray-700 dark:bg-gray-800/80">
-            <div className="flex items-center justify-between gap-4">
+      {step === 'explorer' && (
+        <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
               <div>
-                <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">{text.categories}</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {text.showing} {firstCategoryNumber}-{lastCategoryNumber} {text.of} {totalCategories}
-                </p>
+                <h2 className="text-2xl font-bold text-slate-950 dark:text-white">{text.categoriesTitle}</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{text.showing} {categories.length} {text.of} {totalCategories}</p>
               </div>
-              <span className="rounded-xl bg-blue-50 dark:bg-blue-900/30 px-4 py-2 text-sm font-semibold text-blue-700 dark:text-blue-200">
-                {text.page} {getDisplayPage(currentPage)}
-              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="button" onClick={() => loadCategories(currentPage)} className="rounded-2xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+                  {text.refresh}
+                </button>
+                <button type="button" onClick={() => selectedCategory && setDetailsOpen(true)} disabled={!selectedCategory} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200">
+                  <Bars3Icon className="h-5 w-5" />
+                  {text.viewerTitle}
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div className="p-8">
-          {loading && categories.length === 0 ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            </div>
-          ) : listError ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-6 py-10 text-center dark:border-red-800/50 dark:bg-red-900/20">
-              <p className="text-red-600 dark:text-red-400 font-medium mb-4">{listError}</p>
-              <button
-                onClick={() => loadCategories(currentPage)}
-                className="px-6 py-2 bg-red-600 dark:bg-red-500 hover:bg-red-700 dark:hover:bg-red-600 text-white rounded-xl transition-colors shadow-lg"
-              >
-                {text.retry}
-              </button>
-            </div>
-          ) : categories.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-300 px-6 py-12 text-center dark:border-gray-600">
-              <svg className="mx-auto h-16 w-16 text-gray-400 dark:text-gray-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">{text.noCategories}</h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-4">{text.noCategoriesHelp}</p>
-            </div>
-          ) : (
-            <div className="space-y-5">
-              <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
-                <div className="hidden bg-gray-50 px-5 py-3 text-xs font-semibold uppercase text-gray-500 dark:bg-gray-900/60 dark:text-gray-400 sm:grid sm:grid-cols-[minmax(0,1fr)_120px] sm:gap-4">
-                  <span>{text.category}</span>
-                  <span>{text.gender.replace(' *', '')}</span>
+            <div className="space-y-4">
+              {listError ? (
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">{listError}</div>
+              ) : loading ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 p-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">{text.loadingCategories}</div>
+              ) : categories.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 p-12 text-center dark:border-slate-700">
+                  <RectangleStackIcon className="mx-auto h-14 w-14 text-slate-400" />
+                  <p className="mt-4 font-bold text-slate-900 dark:text-white">{text.noCategories}</p>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{text.noCategoriesHelp}</p>
                 </div>
-                <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {categories.map((cat) => (
-                    <div key={cat.id} className="grid gap-4 px-5 py-5 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/40 sm:grid-cols-[minmax(0,1fr)_120px] sm:items-center">
-                      <div className="flex min-w-0 gap-4">
-                        <div className="relative flex h-14 w-14 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-blue-50 text-base font-bold text-blue-700 ring-1 ring-gray-200 dark:bg-blue-900/40 dark:text-blue-100 dark:ring-gray-700">
-                          {getCategoryName(cat)?.charAt(0)?.toUpperCase() || 'C'}
-                          {cat.icon && (
-                            <img
-                              src={cat.icon}
-                              alt=""
-                              className="absolute inset-0 h-full w-full object-cover"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                              }}
-                            />
-                          )}
-                        </div>
+              ) : categories.map((category) => {
+                const isExpanded = expandedCategoryId === category.id;
+                const isSelected = selectedCategoryId === category.id;
 
-                        <div className="min-w-0">
-                          <h3 className="truncate text-base font-semibold text-gray-900 dark:text-white">{getCategoryName(cat)}</h3>
-                          {cat.nameAr && cat.nameEn && (
-                            <p className="mt-0.5 truncate text-xs font-medium text-gray-400">
-                              {language === 'ar' ? cat.nameEn : cat.nameAr}
-                            </p>
-                          )}
-                          <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-300">
-                            {getCategoryDetails(cat) || text.noDescription}
-                          </p>
+                return (
+                  <article key={category.id} className={`overflow-hidden rounded-[26px] border transition ${isSelected ? 'border-blue-200 bg-blue-50/50 shadow-sm dark:border-blue-900 dark:bg-blue-950/20' : 'border-slate-200 bg-slate-50/50 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950/30'}`}>
+                    <div className="grid gap-4 p-4 md:grid-cols-[112px_minmax(0,1fr)_auto] md:items-center md:p-5">
+                      <button type="button" onClick={() => openCategoryDetails(category)} className="h-24 w-24 overflow-hidden rounded-[22px] bg-white text-left dark:bg-slate-900">
+                        {category.icon ? (
+                          <img src={category.icon} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-2xl font-black text-slate-400">{getCategoryName(category)?.charAt(0)?.toUpperCase() || 'C'}</div>
+                        )}
+                      </button>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="truncate text-xl font-bold text-slate-950 dark:text-white">{getCategoryName(category)}</h3>
+                          {category.parentId && <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 dark:bg-green-950 dark:text-green-200">{text.subcategoryTag}</span>}
+                        </div>
+                        <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{getCategoryDetails(category) || text.noDescription}</p>
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
+                          <span className="rounded-full bg-white px-3 py-1.5 text-slate-700 dark:bg-slate-900 dark:text-slate-200">{getDisplayGender(category.gender)}</span>
+                          <span className="rounded-full bg-white px-3 py-1.5 text-slate-700 dark:bg-slate-900 dark:text-slate-200">{getParentCategoryName(category.parentId)}</span>
                         </div>
                       </div>
-
-                      <div className="sm:text-right">
-                        <span className="inline-flex rounded bg-gray-200 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-200">
-                          {getDisplayGender(cat.gender)}
-                        </span>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <button type="button" onClick={() => openCategoryDetails(category)} className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"><EyeIcon className="h-4 w-4" />{text.viewerTitle}</button>
+                        <button type="button" onClick={() => startEditingCategory(category)} className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700"><PencilSquareIcon className="h-4 w-4" />{text.edit}</button>
+                        <button type="button" onClick={() => handleDelete(category)} disabled={deletingId === category.id} className="inline-flex items-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 transition hover:bg-red-50 dark:border-red-900 dark:bg-slate-900 dark:hover:bg-red-950"><TrashIcon className="h-4 w-4" />{deletingId === category.id ? text.deleting : text.delete}</button>
+                        <button type="button" onClick={() => { setSelectedCategoryId(category.id); setExpandedCategoryId(isExpanded ? null : category.id); }} className="rounded-2xl border border-slate-300 p-3 text-slate-500 transition hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-900"><ChevronDownIcon className={`h-5 w-5 transition ${isExpanded ? 'rotate-180' : ''}`} /></button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
 
-              {totalPages > 1 && (
-                <div className="border-t border-gray-200 pt-6 dark:border-gray-600">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <button
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage === 0}
-                      className="px-6 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]"
-                    >
-                      {text.previous}
-                    </button>
-                    <div className="text-center">
-                      <div className="text-lg font-semibold text-gray-900 dark:text-white">
-                        {text.page} <span className="text-blue-600 dark:text-blue-400">{getDisplayPage(currentPage)}</span> {text.of} {totalPages}
+                    {isExpanded && (
+                      <div className="border-t border-slate-200 px-4 pb-5 pt-4 dark:border-slate-800 md:px-5">
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          <InfoTile label={text.nameEn} value={category.nameEn || '-'} />
+                          <InfoTile label={text.nameAr} value={category.nameAr || '-'} />
+                          <InfoTile label={text.descriptionEn} value={category.detailsEn || '-'} wide />
+                          <InfoTile label={text.descriptionAr} value={category.detailsAr || '-'} wide />
+                        </div>
                       </div>
-                    </div>
-                    <button
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage >= totalPages - 1}
-                      className="px-6 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]"
-                    >
-                      {text.next}
-                    </button>
-                  </div>
-                </div>
-              )}
+                    )}
+                  </article>
+                );
+              })}
             </div>
-          )}
-          </div>
-        </div>
+
+            {totalPages > 1 && (
+              <div className="mt-6 flex items-center justify-between">
+                <button type="button" onClick={() => currentPage > 0 && loadCategories(currentPage - 1)} disabled={currentPage === 0} className="rounded-2xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200">
+                  {text.previous}
+                </button>
+                <span className="text-sm font-bold text-slate-600 dark:text-slate-300">{text.page} {currentPage + 1} {text.of} {totalPages}</span>
+                <button type="button" onClick={() => currentPage < totalPages - 1 && loadCategories(currentPage + 1)} disabled={currentPage >= totalPages - 1} className="rounded-2xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200">
+                  {text.next}
+                </button>
+              </div>
+            )}
+        </section>
+      )}
+
+      <CategoryDetailsDrawer
+        category={selectedCategory}
+        isOpen={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+        onEdit={startEditingCategory}
+        onDelete={handleDelete}
+        deletingId={deletingId}
+        getCategoryName={getCategoryName}
+        getCategoryDetails={getCategoryDetails}
+        getDisplayGender={getDisplayGender}
+        getParentCategoryName={getParentCategoryName}
+        text={text}
+      />
+    </div>
+  );
+};
+
+const StatCard = ({ label, value, tone }) => {
+  const toneClasses = {
+    blue: 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-200',
+    slate: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
+    green: 'bg-green-50 text-green-700 dark:bg-green-950/60 dark:text-green-200',
+    amber: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-200',
+  };
+
+  return (
+    <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${toneClasses[tone]}`}>
+        {label}
       </div>
+      <p className="mt-4 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">{value}</p>
+    </div>
+  );
+};
+
+const InfoTile = ({ label, value, wide = false }) => (
+  <div className={`rounded-2xl bg-slate-100 p-4 dark:bg-slate-950 ${wide ? 'lg:col-span-2' : ''}`}>
+    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{label}</p>
+    <p className="mt-2 text-sm leading-6 text-slate-800 dark:text-slate-200">{value}</p>
+  </div>
+);
+
+const CategoryDetailsDrawer = ({
+  category,
+  isOpen,
+  onClose,
+  onEdit,
+  onDelete,
+  deletingId,
+  getCategoryName,
+  getCategoryDetails,
+  getDisplayGender,
+  getParentCategoryName,
+  text,
+}) => {
+  const { isRtl } = useLanguage();
+
+  return (
+    <div className={`fixed inset-0 z-[70] transition ${isOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+      <div aria-hidden="true" onClick={onClose} className={`absolute inset-0 bg-slate-950/30 transition ${isOpen ? 'opacity-100' : 'opacity-0'}`} />
+      <aside className={`absolute top-0 flex h-full w-full max-w-[460px] flex-col bg-white shadow-2xl transition duration-300 dark:bg-slate-950 ${isRtl ? 'left-0 border-r' : 'right-0 border-l'} border-slate-200 dark:border-slate-800 ${isOpen ? 'translate-x-0' : isRtl ? '-translate-x-full' : 'translate-x-full'}`}>
+        <div className={`flex items-center justify-between border-b border-slate-200 px-6 py-5 dark:border-slate-800 ${isRtl ? 'flex-row-reverse text-right' : 'text-left'}`}>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-600 dark:text-blue-400">{text.viewerTitle}</p>
+          <h2 className="mt-2 text-xl font-bold text-slate-950 dark:text-white">{category ? getCategoryName(category) : text.selectCategory}</h2>
+        </div>
+        <button type="button" onClick={onClose} className="rounded-2xl border border-slate-300 p-2.5 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+          <XMarkIcon className="h-5 w-5" />
+        </button>
+        </div>
+
+        {!category ? (
+          <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-slate-500 dark:text-slate-400">{text.selectCategory}</div>
+        ) : (
+          <div className={`flex-1 space-y-6 overflow-y-auto px-6 py-6 ${isRtl ? 'text-right' : 'text-left'}`}>
+            <div className="overflow-hidden rounded-[28px] bg-slate-100 dark:bg-slate-900">
+              {category.icon ? <img src={category.icon} alt="" className="aspect-[4/3] w-full object-cover" /> : <div className="flex aspect-[4/3] items-center justify-center text-5xl font-black text-slate-400">{getCategoryName(category)?.charAt(0)?.toUpperCase() || 'C'}</div>}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <InfoTile label={text.nameEn} value={category.nameEn || '-'} />
+              <InfoTile label={text.nameAr} value={category.nameAr || '-'} />
+              <InfoTile label={text.gender} value={getDisplayGender(category.gender)} />
+              <InfoTile label={text.parent} value={getParentCategoryName(category.parentId)} />
+              <InfoTile label={text.descriptionEn} value={category.detailsEn || text.noDescription} wide />
+              <InfoTile label={text.descriptionAr} value={category.detailsAr || text.noDescription} wide />
+            </div>
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
+              <p className="text-sm leading-7 text-slate-600 dark:text-slate-300">{getCategoryDetails(category) || text.noDescription}</p>
+            </div>
+          </div>
+        )}
+
+        {category && (
+          <div className="border-t border-slate-200 px-6 py-5 dark:border-slate-800">
+            <div className={`flex flex-wrap gap-3 ${isRtl ? 'justify-start' : 'justify-end'}`}>
+              <button type="button" onClick={() => onEdit(category)} className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700"><PencilSquareIcon className="h-4 w-4" />{text.edit}</button>
+              <button type="button" onClick={() => onDelete(category)} disabled={deletingId === category.id} className="inline-flex items-center gap-2 rounded-2xl border border-red-200 px-4 py-3 text-sm font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:hover:bg-red-950"><TrashIcon className="h-4 w-4" />{deletingId === category.id ? text.deleting : text.delete}</button>
+            </div>
+          </div>
+        )}
+      </aside>
     </div>
   );
 };

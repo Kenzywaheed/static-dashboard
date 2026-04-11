@@ -33,19 +33,19 @@ const menuSections = [
 
 const Sidebar = ({ isDarkMode, onNavigate }) => {
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, isRtl } = useLanguage();
   const { palette } = usePalette();
   const userInitial = user?.name?.charAt(0)?.toUpperCase() || 'B';
 
   return (
-    <aside className={`w-72 h-screen flex flex-col border-r transition-colors ${
+    <aside className={`h-screen w-72 flex flex-col transition-colors ${
       isDarkMode
-        ? 'border-gray-800 bg-gray-950'
+        ? 'border-slate-800 bg-gray-950'
         : 'border-gray-200 bg-white'
-    }`}>
-      <div className="relative overflow-hidden border-b border-gray-200 p-5 dark:border-gray-800">
+    } ${isRtl ? 'border-l' : 'border-r'}`}>
+      <div className={`relative overflow-hidden border-b border-gray-200 p-5 dark:border-gray-800 ${isRtl ? 'text-right' : 'text-left'}`}>
         <div className="absolute inset-x-0 top-0 h-1 bg-[var(--brand-primary)]" />
-        <div className="flex items-center gap-3">
+        <div className={`flex items-center gap-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
           <div className="grid h-12 w-12 flex-shrink-0 place-items-center rounded-lg bg-[var(--brand-primary)] text-white shadow-lg shadow-gray-950/20">
             <SparklesIcon className="h-7 w-7" />
           </div>
@@ -56,7 +56,7 @@ const Sidebar = ({ isDarkMode, onNavigate }) => {
         </div>
 
         <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-900">
-          <div className="flex items-center gap-3">
+          <div className={`flex items-center gap-3 ${isRtl ? 'flex-row-reverse' : ''}`}>
             <div className="grid h-9 w-9 place-items-center rounded bg-gray-950 text-sm font-bold text-white dark:bg-white dark:text-gray-950">
               {userInitial}
             </div>
@@ -71,7 +71,7 @@ const Sidebar = ({ isDarkMode, onNavigate }) => {
       <nav className="flex-1 overflow-y-auto px-4 py-5">
         {menuSections.map((section) => (
           <div key={section.sectionKey} className="mb-7 last:mb-0">
-            <p className="mb-3 px-3 text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+            <p className={`mb-3 px-3 text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 ${isRtl ? 'text-right' : 'text-left'}`}>
               {t.navSections?.[section.sectionKey] || section.sectionKey}
             </p>
             <div className="space-y-1.5">
@@ -81,7 +81,7 @@ const Sidebar = ({ isDarkMode, onNavigate }) => {
                   to={item.path}
                   onClick={onNavigate}
                   className={({ isActive }) =>
-                    `group relative flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-bold transition ${
+                    `group relative flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-bold transition ${isRtl ? 'flex-row-reverse text-right' : 'text-left'} ${
                       isActive
                         ? 'bg-[var(--brand-primary-soft)] text-[var(--brand-primary-dark)] dark:bg-gray-900 dark:text-white'
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-900 dark:hover:text-white'
@@ -90,7 +90,7 @@ const Sidebar = ({ isDarkMode, onNavigate }) => {
                 >
                   {({ isActive }) => (
                     <>
-                      <span className={`absolute inset-y-2 w-1 rounded-full bg-[var(--brand-primary)] transition-opacity ${isActive ? 'opacity-100' : 'opacity-0'} ltr:left-0 rtl:right-0`} />
+                      <span className={`absolute inset-y-2 w-1 rounded-full bg-[var(--brand-primary)] transition-opacity ${isActive ? 'opacity-100' : 'opacity-0'} ${isRtl ? 'right-0' : 'left-0'}`} />
                       <span className={`grid h-9 w-9 place-items-center rounded-lg transition ${
                         isActive
                           ? 'bg-[var(--brand-primary)] text-white shadow-sm'
@@ -98,7 +98,7 @@ const Sidebar = ({ isDarkMode, onNavigate }) => {
                       }`}>
                         <item.icon className="h-5 w-5" />
                       </span>
-                      <span className="min-w-0 truncate">{t.nav[item.labelKey]}</span>
+                      <span className="min-w-0 flex-1 truncate">{t.nav[item.labelKey]}</span>
                     </>
                   )}
                 </NavLink>
@@ -109,7 +109,7 @@ const Sidebar = ({ isDarkMode, onNavigate }) => {
       </nav>
 
       <div className="border-t border-gray-200 p-4 dark:border-gray-800">
-        <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900">
+        <div className={`rounded-lg bg-gray-50 p-4 dark:bg-gray-900 ${isRtl ? 'text-right' : 'text-left'}`}>
           <p className="text-xs font-bold text-gray-500 dark:text-gray-400">{t.sidebar?.palette || 'Palette'}</p>
           <div className="mt-3 flex items-center gap-3">
             <span className="h-7 flex-1 rounded" style={{ backgroundColor: palette.primary }} />

@@ -13,8 +13,64 @@ import { useLanguage } from '../hooks/useLanguage';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const getOtpErrorMessage = (t, errorMessage, remainingAttempts) => {
+  const normalizedMessage = (errorMessage || '').trim().toLowerCase();
+
+  if (normalizedMessage === 'user not found') {
+    return t.auth.userNotFound;
+  }
+
+  if (normalizedMessage === 'otp not found') {
+    return t.auth.otpNotFound;
+  }
+
+  if (normalizedMessage === 'otp has expired') {
+    return t.auth.otpExpired;
+  }
+
+  if (normalizedMessage === 'otp already used') {
+    return t.auth.otpAlreadyUsed;
+  }
+
+  if (normalizedMessage === 'maximum verification attempts reached') {
+    return t.auth.otpAttemptsExceeded;
+  }
+
+  if (normalizedMessage === 'invalid otp code') {
+    return typeof remainingAttempts === 'number'
+      ? t.auth.otpInvalidWithAttempts.replace('{count}', remainingAttempts)
+      : t.auth.otpInvalid;
+  }
+
+  if (normalizedMessage === 'otp code is required') {
+    return t.auth.otpRequired;
+  }
+
+  if (normalizedMessage === 'recipient code is required' || normalizedMessage === 'recipient is required') {
+    return t.auth.emailRequired;
+  }
+
+  if (normalizedMessage === 'purpose code is required' || normalizedMessage === 'purpose is required') {
+    return t.auth.otpPurposeRequired;
+  }
+
+  if (normalizedMessage === 'channel is required') {
+    return t.auth.otpChannelRequired;
+  }
+
+  if (normalizedMessage === 'email is required') {
+    return t.auth.emailRequired;
+  }
+
+  return errorMessage || t.auth.unexpectedOtpError;
+};
+
 const Login = () => {
-  const { isAuthenticated, requestBrandOtp, verifyBrandOtp } = useAuth();
+  const {
+    isAuthenticated,
+    requestBrandOtp,
+    verifyBrandOtp,
+  } = useAuth();
   const { language, setLanguage, t, isRtl } = useLanguage();
   const navigate = useNavigate();
   const [step, setStep] = useState('email');
@@ -54,7 +110,7 @@ const Login = () => {
     setIsLoading(false);
 
     if (!result.success) {
-      setError(result.error || t.auth.emailInvalid);
+      setError(getOtpErrorMessage(t, result.error, result.remainingAttempts));
       return;
     }
 
@@ -77,7 +133,7 @@ const Login = () => {
     setIsLoading(false);
 
     if (!result.success) {
-      setError(t.auth.otpInvalid);
+      setError(getOtpErrorMessage(t, result.error, result.remainingAttempts));
       return;
     }
 
@@ -163,7 +219,6 @@ const Login = () => {
                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-100">
                   <p className="font-semibold">{t.auth.otpTitle}</p>
                   <p className="mt-1 break-all">{t.auth.otpHelp} {email}</p>
-                  <p className="mt-3 font-semibold">{t.auth.mockHint}</p>
                 </div>
 
                 <div>
