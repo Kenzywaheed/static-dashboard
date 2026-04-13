@@ -224,12 +224,12 @@ const Login = () => {
                   <p className="mt-1 break-all">{t.auth.otpHelp} {email}</p>
                 </div>
 
-                {otpDebugResponse && (
+                {otpDebugResponse?.otpCode && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
-                    <p className="font-semibold">OTP API response (testing)</p>
-                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-black/5 p-3 text-xs dark:bg-white/5">
-                      {JSON.stringify(otpDebugResponse, null, 2)}
-                    </pre>
+                    <p className="font-semibold">OTP code (testing)</p>
+                    <p className="mt-2 rounded-md bg-black/5 p-3 font-mono text-lg font-bold tracking-[0.35em] dark:bg-white/5">
+                      {otpDebugResponse.otpCode}
+                    </p>
                   </div>
                 )}
 
