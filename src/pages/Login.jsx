@@ -65,6 +65,42 @@ const getOtpErrorMessage = (t, errorMessage, remainingAttempts) => {
   return errorMessage || t.auth.unexpectedOtpError;
 };
 
+const extractOtpCode = (response) => {
+  if (!response || typeof response !== 'object') {
+    return '';
+  }
+
+  const queue = [response];
+  const visited = new Set();
+  const candidateKeys = ['otpCode', 'otp', 'code', 'oneTimePassword'];
+
+  while (queue.length) {
+    const current = queue.shift();
+
+    if (!current || typeof current !== 'object' || visited.has(current)) {
+      continue;
+    }
+
+    visited.add(current);
+
+    for (const key of candidateKeys) {
+      const value = current[key];
+
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+    }
+
+    Object.values(current).forEach((value) => {
+      if (value && typeof value === 'object') {
+        queue.push(value);
+      }
+    });
+  }
+
+  return '';
+};
+
 const Login = () => {
   const {
     isAuthenticated,
@@ -79,6 +115,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [otpDebugResponse, setOtpDebugResponse] = useState(null);
+  const returnedOtpCode = extractOtpCode(otpDebugResponse);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -224,11 +261,11 @@ const Login = () => {
                   <p className="mt-1 break-all">{t.auth.otpHelp} {email}</p>
                 </div>
 
-                {otpDebugResponse?.otpCode && (
+                {returnedOtpCode && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
                     <p className="font-semibold">OTP code (testing)</p>
                     <p className="mt-2 rounded-md bg-black/5 p-3 font-mono text-lg font-bold tracking-[0.35em] dark:bg-white/5">
-                      {otpDebugResponse.otpCode}
+                      {returnedOtpCode}
                     </p>
                   </div>
                 )}
