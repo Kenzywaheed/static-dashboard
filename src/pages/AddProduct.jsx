@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import toast from "react-hot-toast";
+import { useEffect, useMemo, useRef, useState } from 'react';
+import toast from 'react-hot-toast';
 import {
   CheckCircleIcon,
   ChevronDownIcon,
@@ -9,8 +9,9 @@ import {
   PlusIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
-import { categoriesAPI } from "../services/endpoints";
-import { useLanguage } from "../hooks/useLanguage";
+import { categoriesAPI, productsAPI } from '../services/endpoints';
+import { useLanguage } from '../hooks/useLanguage';
+import { useAuth } from '../hooks/useAuth';
 import {
   PRODUCT_SIZES,
   createLocalProduct,
@@ -21,12 +22,15 @@ import {
   getProductStock,
   loadSavedProducts,
   saveProducts,
+  toBackendProductItemPayload,
   toBackendProductPayload,
-} from "../services/productCatalogStore";
+} from '../services/productCatalogStore';
 
 const EMPTY_PRODUCT_FORM = {
-  productName: '',
-  productDescription: '',
+  productNameEn: '',
+  productDescriptionEn: '',
+  productNameAr: '',
+  productDescriptionAr: '',
   categoryId: '',
   categoryName: '',
   price: '',
@@ -44,11 +48,6 @@ const EMPTY_ITEM_FORM = {
   sizes: getEmptySizeMap(),
 };
 
-const fallbackCategories = [
-  { id: 'waiting-men', name: 'Men' },
-  { id: 'waiting-women', name: 'Women' },
-];
-
 const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
   reader.onload = () => resolve(reader.result);
@@ -58,25 +57,76 @@ const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
 
 const normalizeCategory = (category) => ({
   id: category.id,
-  name: category.categoryName || category.name,
+  name: category.categoryNameEn || category.categoryName || category.name || '',
 });
 
+const findFirstArrayInObject = (value, seen = new Set()) => {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== 'object' || seen.has(value)) return null;
+
+  seen.add(value);
+
+  for (const nestedValue of Object.values(value)) {
+    const match = findFirstArrayInObject(nestedValue, seen);
+    if (match) return match;
+  }
+
+  return null;
+};
+
+const normalizeCategoriesResponse = (data) => (
+  [
+    data?.content,
+    data?.categories,
+    data?.data?.content,
+    data?.data?.categories,
+    data?.items,
+    data?.result,
+    findFirstArrayInObject(data),
+    Array.isArray(data) ? data : null,
+  ].find(Array.isArray) || []
+);
+
+const getApiErrorMessage = (err, fallbackMessage) => {
+  const responseData = err?.response?.data;
+
+  if (typeof responseData === 'string') return responseData;
+
+  return responseData?.message || responseData?.error || fallbackMessage;
+};
+
 const AddProduct = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const { user } = useAuth();
   const text = t.product;
   const thumbnailInputRef = useRef(null);
   const itemImagesInputRef = useRef(null);
+
   const [step, setStep] = useState('product');
   const [productForm, setProductForm] = useState(EMPTY_PRODUCT_FORM);
   const [itemForm, setItemForm] = useState(EMPTY_ITEM_FORM);
   const [currentProduct, setCurrentProduct] = useState(null);
   const [products, setProducts] = useState(loadSavedProducts);
-  const [categories, setCategories] = useState(fallbackCategories);
+  const [categories, setCategories] = useState([]);
   const [expandedProductId, setExpandedProductId] = useState(null);
   const [payloadPreviewProduct, setPayloadPreviewProduct] = useState(null);
+  const [creatingProduct, setCreatingProduct] = useState(false);
 
   const currentStock = currentProduct ? getProductStock(currentProduct) : 0;
   const itemStock = getProductItemStock(itemForm);
+  const brandId = user?.id || '';
+
+  const getProductName = (product) => (
+    language === 'ar'
+      ? product.productNameAr || product.productNameEn
+      : product.productNameEn || product.productNameAr
+  );
+
+  const getProductDescription = (product) => (
+    language === 'ar'
+      ? product.productDescriptionAr || product.productDescriptionEn
+      : product.productDescriptionEn || product.productDescriptionAr
+  );
 
   const productsWithStock = useMemo(() => (
     products.map((product) => ({
@@ -92,20 +142,20 @@ const AddProduct = () => {
 
   useEffect(() => {
     const loadCategories = async () => {
-      try {
-        const response = await categoriesAPI.getAll(0, 100);
-        const nextCategories = (response.data?.content || []).map(normalizeCategory);
+      if (!brandId) return;
 
-        if (nextCategories.length > 0) {
-          setCategories(nextCategories);
-        }
+      try {
+        const response = await categoriesAPI.getAll({ brandId, page: 0, size: 100 });
+        const nextCategories = normalizeCategoriesResponse(response.data).map(normalizeCategory);
+        setCategories(nextCategories);
       } catch (err) {
         console.warn('Categories unavailable for product form:', err);
+        setCategories([]);
       }
     };
 
     loadCategories();
-  }, []);
+  }, [brandId]);
 
   const updateProductField = (field, value) => {
     const nextForm = { ...productForm, [field]: value };
@@ -168,33 +218,63 @@ const AddProduct = () => {
   };
 
   const validateProduct = () => {
-    if (!productForm.productName.trim()) return text.errors.productName;
-    if (!productForm.productDescription.trim()) return text.errors.productDescription;
+    if (!productForm.productNameEn.trim()) return text.errors.productNameEn || 'English product name is required';
+    if (!productForm.productNameAr.trim()) return text.errors.productNameAr || 'Arabic product name is required';
+    if (!productForm.productDescriptionEn.trim()) return text.errors.productDescriptionEn || 'English product description is required';
+    if (!productForm.productDescriptionAr.trim()) return text.errors.productDescriptionAr || 'Arabic product description is required';
     if (!productForm.price || Number(productForm.price) <= 0) return text.errors.price;
     if (!productForm.categoryId) return text.errors.category;
-    if (!productForm.thumbnail) return text.errors.thumbnail;
+    if (!productForm.thumbnailFile) return text.errors.thumbnail;
     return '';
   };
 
-  const saveProductAndContinue = () => {
+  const buildCreateProductRequest = () => ({
+    productNameEn: productForm.productNameEn.trim(),
+    productDescriptionEn: productForm.productDescriptionEn.trim(),
+    productNameAr: productForm.productNameAr.trim(),
+    productDescriptionAr: productForm.productDescriptionAr.trim(),
+    productPrice: productForm.price,
+    categoryId: productForm.categoryId,
+    thumbnail: productForm.thumbnailFile,
+  });
+
+  const saveProductAndContinue = async () => {
     const validationError = validateProduct();
     if (validationError) {
       toast.error(validationError);
       return;
     }
 
-    const product = createLocalProduct({
-      ...productForm,
-      price: Number(productForm.price),
-      productItems: [],
-      status: 'draft',
-    });
+    setCreatingProduct(true);
 
-    setCurrentProduct(product);
-    setProducts((currentProducts) => [product, ...currentProducts]);
-    setItemForm({ ...EMPTY_ITEM_FORM, price: productForm.price });
-    setStep('items');
-    toast.success(text.toasts.productSaved);
+    try {
+      const { data } = await productsAPI.create(buildCreateProductRequest());
+      const product = createLocalProduct({
+        id: data?.productId,
+        productNameEn: data?.productNameEn || productForm.productNameEn.trim(),
+        productDescriptionEn: productForm.productDescriptionEn.trim(),
+        productNameAr: data?.productNameAr || productForm.productNameAr.trim(),
+        productDescriptionAr: productForm.productDescriptionAr.trim(),
+        categoryId: productForm.categoryId,
+        categoryName: data?.categoryNameEn || productForm.categoryName,
+        price: Number(productForm.price),
+        thumbnail: data?.thumbnail || productForm.thumbnail,
+        thumbnailFile: productForm.thumbnailFile,
+        productItems: [],
+        status: 'draft',
+        syncedWithApi: true,
+      });
+
+      setCurrentProduct(product);
+      setProducts((currentProducts) => [product, ...currentProducts]);
+      setItemForm({ ...EMPTY_ITEM_FORM, price: productForm.price });
+      setStep('items');
+      toast.success(text.toasts.productSavedToApi || 'Product created in API. Add product items next.');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, text.toasts.productSaveFailed || 'Failed to create product'));
+    } finally {
+      setCreatingProduct(false);
+    }
   };
 
   const validateItem = () => {
@@ -237,14 +317,17 @@ const AddProduct = () => {
     setProductForm(EMPTY_PRODUCT_FORM);
     setItemForm(EMPTY_ITEM_FORM);
     setCurrentProduct(null);
+    setPayloadPreviewProduct(null);
     setStep('product');
   };
 
   const editExistingProduct = (product) => {
     setCurrentProduct(product);
     setProductForm({
-      productName: product.productName,
-      productDescription: product.productDescription,
+      productNameEn: product.productNameEn || '',
+      productDescriptionEn: product.productDescriptionEn || '',
+      productNameAr: product.productNameAr || '',
+      productDescriptionAr: product.productDescriptionAr || '',
       categoryId: product.categoryId,
       categoryName: product.categoryName,
       price: product.price.toString(),
@@ -291,7 +374,8 @@ const AddProduct = () => {
     toast.success(text.toasts.apiReady);
   };
 
-  const payloadPreview = payloadPreviewProduct ? toBackendProductPayload(payloadPreviewProduct) : null;
+  const productPayloadPreview = payloadPreviewProduct ? toBackendProductPayload(payloadPreviewProduct) : null;
+  const productItemsPayloadPreview = payloadPreviewProduct ? toBackendProductItemPayload(payloadPreviewProduct) : null;
 
   return (
     <div className="space-y-8">
@@ -339,6 +423,7 @@ const AddProduct = () => {
           onThumbnailChange={handleThumbnailChange}
           onUpdateProductField={updateProductField}
           onContinue={saveProductAndContinue}
+          creatingProduct={creatingProduct}
           text={text}
         />
       )}
@@ -357,6 +442,7 @@ const AddProduct = () => {
           onAddProductItem={addProductItem}
           onDeleteProductItem={deleteProductItem}
           onFinish={markReadyForApi}
+          getProductName={getProductName}
           text={text}
         />
       )}
@@ -368,23 +454,40 @@ const AddProduct = () => {
           onToggleProduct={setExpandedProductId}
           onEdit={editExistingProduct}
           onDelete={deleteProduct}
+          getProductName={getProductName}
+          getProductDescription={getProductDescription}
           text={text}
         />
       )}
 
-      {payloadPreview && step === 'catalog' && (
+      {payloadPreviewProduct && step === 'catalog' && (
         <section className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900">
           <h2 className="text-xl font-bold text-gray-950 dark:text-white">{text.payloadTitle}</h2>
           <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">
             {text.payloadHelp}
           </p>
-          <pre className="mt-5 max-h-96 overflow-auto rounded-lg bg-gray-950 p-4 text-xs leading-6 text-gray-100">
-            {JSON.stringify(payloadPreview, (key, value) => {
-              if (key === 'thumbnail' && value instanceof File) return value.name;
-              if (key === 'imagesOfProductItem') return value.map((file) => file.name);
-              return value;
-            }, 2)}
-          </pre>
+
+          <div className="mt-5 grid gap-6 xl:grid-cols-2">
+            <div>
+              <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100">{text.productApiPayloadTitle || 'Product creation payload'}</h3>
+              <pre className="mt-3 max-h-96 overflow-auto rounded-lg bg-gray-950 p-4 text-xs leading-6 text-gray-100">
+                {JSON.stringify(productPayloadPreview, (key, value) => {
+                  if (key === 'thumbnail' && value instanceof File) return value.name;
+                  return value;
+                }, 2)}
+              </pre>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100">{text.productItemsApiPayloadTitle || 'Next product-items payload draft'}</h3>
+              <pre className="mt-3 max-h-96 overflow-auto rounded-lg bg-gray-950 p-4 text-xs leading-6 text-gray-100">
+                {JSON.stringify(productItemsPayloadPreview, (key, value) => {
+                  if (key === 'imagesOfProductItem') return value.map((file) => file.name);
+                  return value;
+                }, 2)}
+              </pre>
+            </div>
+          </div>
         </section>
       )}
     </div>
@@ -398,6 +501,7 @@ const ProductStep = ({
   onThumbnailChange,
   onUpdateProductField,
   onContinue,
+  creatingProduct,
   text,
 }) => (
   <section className="grid gap-8 lg:grid-cols-[360px_minmax(0,1fr)]">
@@ -423,9 +527,14 @@ const ProductStep = ({
 
     <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900">
       <div className="grid gap-5 md:grid-cols-2">
-        <label className="block md:col-span-2">
-          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.productName}</span>
-          <input value={productForm.productName} onChange={(e) => onUpdateProductField('productName', e.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder={text.productNamePlaceholder} />
+        <label className="block">
+          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.productNameEn || 'Product name EN'}</span>
+          <input value={productForm.productNameEn} onChange={(e) => onUpdateProductField('productNameEn', e.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder={text.productNameEnPlaceholder || text.productNamePlaceholder} />
+        </label>
+
+        <label className="block">
+          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.productNameAr || 'Product name AR'}</span>
+          <input value={productForm.productNameAr} onChange={(e) => onUpdateProductField('productNameAr', e.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder={text.productNameArPlaceholder || 'اكتب اسم المنتج بالعربية'} dir="rtl" />
         </label>
 
         <label className="block">
@@ -442,14 +551,19 @@ const ProductStep = ({
         </label>
 
         <label className="block md:col-span-2">
-          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.description}</span>
-          <textarea value={productForm.productDescription} onChange={(e) => onUpdateProductField('productDescription', e.target.value)} rows={6} className="mt-2 w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder={text.descriptionPlaceholder} />
+          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.descriptionEn || 'Description EN'}</span>
+          <textarea value={productForm.productDescriptionEn} onChange={(e) => onUpdateProductField('productDescriptionEn', e.target.value)} rows={4} className="mt-2 w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder={text.descriptionEnPlaceholder || text.descriptionPlaceholder} />
+        </label>
+
+        <label className="block md:col-span-2">
+          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.descriptionAr || 'Description AR'}</span>
+          <textarea value={productForm.productDescriptionAr} onChange={(e) => onUpdateProductField('productDescriptionAr', e.target.value)} rows={4} className="mt-2 w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder={text.descriptionArPlaceholder || 'اكتب وصف المنتج بالعربية'} dir="rtl" />
         </label>
       </div>
 
       <div className="mt-8 flex justify-end">
-        <button type="button" onClick={onContinue} className="rounded-lg bg-blue-600 px-7 py-3 font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700">
-          {text.saveAndAddItems}
+        <button type="button" disabled={creatingProduct} onClick={onContinue} className="rounded-lg bg-blue-600 px-7 py-3 font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50">
+          {creatingProduct ? (text.creatingProduct || 'Creating product...') : (text.saveAndAddItems || 'Save product and add items')}
         </button>
       </div>
     </div>
@@ -469,13 +583,14 @@ const ProductItemsStep = ({
   onAddProductItem,
   onDeleteProductItem,
   onFinish,
+  getProductName,
   text,
 }) => (
   <section className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_420px]">
     <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900">
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-950 dark:text-white">{currentProduct.productName}</h2>
+          <h2 className="text-2xl font-bold text-gray-950 dark:text-white">{getProductName(currentProduct)}</h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{text.totalStock}: <span className="font-bold text-blue-600 dark:text-blue-400">{currentStock}</span></p>
         </div>
         <button type="button" onClick={onFinish} className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-5 py-3 font-bold text-white transition hover:bg-green-700">
@@ -648,7 +763,7 @@ const ProductItemsPanel = ({ product, onDeleteItem, text }) => (
   </aside>
 );
 
-const CatalogManager = ({ products, expandedProductId, onToggleProduct, onEdit, onDelete, text }) => (
+const CatalogManager = ({ products, expandedProductId, onToggleProduct, onEdit, onDelete, getProductName, getProductDescription, text }) => (
   <section className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900">
     <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
       <div>
@@ -675,6 +790,8 @@ const CatalogManager = ({ products, expandedProductId, onToggleProduct, onEdit, 
           onToggleProduct={onToggleProduct}
           onEdit={onEdit}
           onDelete={onDelete}
+          getProductName={getProductName}
+          getProductDescription={getProductDescription}
           text={text}
         />
       ))}
@@ -682,18 +799,21 @@ const CatalogManager = ({ products, expandedProductId, onToggleProduct, onEdit, 
   </section>
 );
 
-const CatalogProduct = ({ product, isExpanded, onToggleProduct, onEdit, onDelete, text }) => (
+const CatalogProduct = ({ product, isExpanded, onToggleProduct, onEdit, onDelete, getProductName, getProductDescription, text }) => (
   <article className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
     <button type="button" onClick={() => onToggleProduct(isExpanded ? null : product.id)} className="grid w-full gap-4 p-4 text-start transition hover:bg-gray-50 dark:hover:bg-gray-800 md:grid-cols-[96px_minmax(0,1fr)_auto] md:items-center">
       <img src={product.thumbnail} alt="" className="h-24 w-24 rounded-lg object-cover" />
       <div className="min-w-0">
-        <h3 className="truncate text-lg font-bold text-gray-950 dark:text-white">{product.productName}</h3>
-        <p className="mt-1 line-clamp-2 text-sm leading-6 text-gray-500 dark:text-gray-400">{product.productDescription}</p>
+        <h3 className="truncate text-lg font-bold text-gray-950 dark:text-white">{getProductName(product)}</h3>
+        <p className="mt-1 line-clamp-2 text-sm leading-6 text-gray-500 dark:text-gray-400">{getProductDescription(product)}</p>
         <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
           <span className="rounded bg-blue-50 px-2.5 py-1.5 text-blue-700 dark:bg-blue-950 dark:text-blue-200">{product.categoryName}</span>
           <span className="rounded bg-green-50 px-2.5 py-1.5 text-green-700 dark:bg-green-950 dark:text-green-200">{product.totalStock} {text.pieces}</span>
           <span className="rounded bg-gray-100 px-2.5 py-1.5 text-gray-700 dark:bg-gray-800 dark:text-gray-200">{product.productItems.length} {text.items}</span>
           <span className="rounded bg-gray-100 px-2.5 py-1.5 text-gray-700 dark:bg-gray-800 dark:text-gray-200">{product.colors.length} {text.colors}</span>
+          {product.syncedWithApi && (
+            <span className="rounded bg-emerald-50 px-2.5 py-1.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200">{text.apiSyncedBadge || 'API created'}</span>
+          )}
         </div>
       </div>
       <ChevronDownIcon className={`h-6 w-6 text-gray-400 transition ${isExpanded ? 'rotate-180' : ''}`} />

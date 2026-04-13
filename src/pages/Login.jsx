@@ -78,6 +78,7 @@ const Login = () => {
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [otpDebugResponse, setOtpDebugResponse] = useState(null);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -92,6 +93,7 @@ const Login = () => {
   const handleRequestOtp = async (e) => {
     e.preventDefault();
     setError('');
+    setOtpDebugResponse(null);
 
     const normalizedEmail = email.trim().toLowerCase();
 
@@ -115,6 +117,7 @@ const Login = () => {
     }
 
     setEmail(result.email);
+    setOtpDebugResponse(result.response || null);
     setStep('otp');
     toast.success(t.auth.otpSent);
   };
@@ -221,6 +224,15 @@ const Login = () => {
                   <p className="mt-1 break-all">{t.auth.otpHelp} {email}</p>
                 </div>
 
+                {otpDebugResponse && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+                    <p className="font-semibold">OTP API response (testing)</p>
+                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-black/5 p-3 text-xs dark:bg-white/5">
+                      {JSON.stringify(otpDebugResponse, null, 2)}
+                    </pre>
+                  </div>
+                )}
+
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-200">
                     {t.auth.otpLabel}
@@ -253,6 +265,7 @@ const Login = () => {
                     setStep('email');
                     setOtp('');
                     setError('');
+                    setOtpDebugResponse(null);
                   }}
                   className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white"
                 >

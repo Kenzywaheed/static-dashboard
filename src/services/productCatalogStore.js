@@ -58,7 +58,7 @@ export const saveProducts = (products) => {
 
 export const createLocalProduct = (product) => ({
   ...product,
-  id: makeId(),
+  id: product.id || makeId(),
   createdAt: new Date().toISOString(),
 });
 
@@ -68,11 +68,17 @@ export const createLocalProductItem = (item) => ({
 });
 
 export const toBackendProductPayload = (product) => ({
-  productDto: {
-    productName: product.productName,
-    productDescription: product.productDescription,
-    thumbnail: product.thumbnailFile || product.thumbnail || null,
-  },
+  productNameEn: product.productNameEn || '',
+  productDescriptionEn: product.productDescriptionEn || '',
+  productNameAr: product.productNameAr || '',
+  productDescriptionAr: product.productDescriptionAr || '',
+  productPrice: Number(product.price || 0),
+  categoryId: product.categoryId || '',
+  thumbnail: product.thumbnailFile || product.thumbnail || null,
+});
+
+export const toBackendProductItemPayload = (product) => ({
+  productId: product.id,
   productItemList: (product.productItems || []).map((item) => ({
     color: item.colorName || item.colorHex,
     size: Object.entries(item.sizes || {})

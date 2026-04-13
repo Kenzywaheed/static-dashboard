@@ -7,7 +7,7 @@ const API_BASE_URL = 'https://ecommerce-app-e6303c36e118.herokuapp.com';
 const BRAND_OWNER_CATEGORIES_BASE_URL = `${API_BASE_URL}/api/v1/brands/categories`;
 const PUBLIC_BRAND_CATEGORIES_BASE_URL = `${API_BASE_URL}/api/v1/categories/brands`;
 const OTP_BASE_URL = `${API_BASE_URL}/api/v1/public/otp`;
-const PRODUCTS_BASE_URL = 'API_WAITING_FOR_BACKEND_PRODUCT_ROUTE';
+const PRODUCTS_BASE_URL = `${API_BASE_URL}/api/v1/brands/product`;
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -156,5 +156,8 @@ export const authAPI = {
 };
 
 export const productsAPI = {
-  create: () => Promise.reject(new Error(`Product API is not ready: ${PRODUCTS_BASE_URL}`)),
+  create: (data) => apiClient.post(
+    PRODUCTS_BASE_URL,
+    toFormData(data, { keepEmptyStrings: true }),
+  ),
 };

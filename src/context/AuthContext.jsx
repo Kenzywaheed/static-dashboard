@@ -111,8 +111,10 @@ export const AuthProvider = ({ children }) => {
         email: normalizedEmail,
         otpId: data?.otpId || '',
         expiresAt: data?.expiresAt || '',
+        response: data || null,
       };
     } catch (error) {
+      const responseData = error?.response?.data || null;
       const message = error?.response?.data?.message
         || error?.message
         || 'Failed to send OTP';
@@ -120,6 +122,7 @@ export const AuthProvider = ({ children }) => {
       return {
         success: false,
         error: message,
+        response: responseData,
       };
     }
   }, []);
