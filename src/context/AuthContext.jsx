@@ -97,7 +97,7 @@ export const AuthProvider = ({ children }) => {
     const normalizedEmail = email.trim().toLowerCase();
 
     try {
-      const { data } = await authAPI.generateOtp({
+      await authAPI.generateOtp({
         email: normalizedEmail,
         recipient: normalizedEmail,
         purpose: 'EMAIL',
@@ -109,12 +109,8 @@ export const AuthProvider = ({ children }) => {
       return {
         success: true,
         email: normalizedEmail,
-        otpId: data?.otpId || '',
-        expiresAt: data?.expiresAt || '',
-        response: data || null,
       };
     } catch (error) {
-      const responseData = error?.response?.data || null;
       const message = error?.response?.data?.message
         || error?.message
         || 'Failed to send OTP';
@@ -122,7 +118,6 @@ export const AuthProvider = ({ children }) => {
       return {
         success: false,
         error: message,
-        response: responseData,
       };
     }
   }, []);

@@ -8,10 +8,10 @@ import ErrorBoundary from './components/Common/ErrorBoundary';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout/Layout';
 import Dashboard from './pages/Dashboard';
-import OrderManagement from './pages/OrderManagement';
+import OrderManagement from './pages/OrderManagementLite';
 import AddProduct from './pages/AddProduct';
 import Notifications from './pages/Notifications';
-import Calendar from './pages/Calendar';
+import Calendar from './pages/CalendarLite';
 import CategoryManager from './pages/CategoryManager';
 import Login from './pages/Login';
 import BrandSetup from './pages/BrandSetup';
@@ -64,4 +64,5 @@ function App() {
 }
 
 export default App;
+
 

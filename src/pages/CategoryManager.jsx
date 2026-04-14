@@ -340,9 +340,6 @@ const CategoryManager = () => {
             <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">{text.title}</h1>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600 dark:text-slate-300">{text.subtitle}</p>
             <div className="mt-5 flex flex-wrap items-center gap-3 text-sm">
-              <span className="rounded-full border border-slate-200 bg-white/80 px-4 py-2 font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">
-                {text.brandBadge}: {brandId || text.brandMissing}
-              </span>
               {isEditing && (
                 <span className="rounded-full border border-blue-200 bg-blue-100 px-4 py-2 font-semibold text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
                   {text.editingBadge}

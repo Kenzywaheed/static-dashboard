@@ -75,10 +75,6 @@ const Dashboard = () => {
           <h1 className="text-2xl font-bold text-gray-800 dark:text-white">{pageText.title}</h1>
           <p className="mt-2 leading-7 text-gray-500 dark:text-gray-400">{pageText.welcome}</p>
         </div>
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100 lg:max-w-md">
-          <p className="font-bold">{pageText.waitingForApi}</p>
-          <p className="mt-1 leading-6">{pageText.waitingForApiBody}</p>
-        </div>
       </div>
 
       {/* Stats Cards */}
