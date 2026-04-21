@@ -46,7 +46,7 @@ const Header = ({ toggleSidebar, isDarkMode, setIsDarkMode }) => {
   const userInitial = user?.name?.charAt(0)?.toUpperCase() || 'B';
 
   return (
-    <header className="sticky top-0 z-40 border-b border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/88 backdrop-blur dark:border-slate-800 dark:bg-slate-900/88">
       <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div className="flex min-w-0 flex-1 items-center gap-4">
           <button
@@ -59,12 +59,12 @@ const Header = ({ toggleSidebar, isDarkMode, setIsDarkMode }) => {
           </button>
 
           <div className="hidden min-w-0 flex-1 md:block">
-            <div className="relative max-w-md">
+            <div className="relative max-w-xl">
               <MagnifyingGlassIcon className={`absolute top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 ${isRtl ? 'right-3' : 'left-3'}`} />
               <input
                 type="text"
-                placeholder={t.header.search}
-                className={`w-full rounded-lg border border-gray-300 bg-gray-50 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 ${isRtl ? 'pl-4 pr-10' : 'pl-10 pr-4'}`}
+                placeholder="Search"
+                className={`w-full rounded-full border border-slate-300 bg-slate-50 py-2.5 text-sm text-slate-900 outline-none transition focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 ${isRtl ? 'pl-4 pr-10' : 'pl-10 pr-4'}`}
               />
             </div>
           </div>
@@ -74,7 +74,7 @@ const Header = ({ toggleSidebar, isDarkMode, setIsDarkMode }) => {
           <button
             type="button"
             onClick={toggleLanguage}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:hover:bg-gray-800"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800"
             aria-label={t.header.language}
           >
             <LanguageIcon className="h-5 w-5" />
@@ -84,7 +84,7 @@ const Header = ({ toggleSidebar, isDarkMode, setIsDarkMode }) => {
           <button
             type="button"
             onClick={() => setIsDarkMode(!isDarkMode)}
-            className="rounded-lg border border-gray-200 bg-white p-2 text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-300 dark:hover:bg-gray-800"
+            className="rounded-full border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800"
             aria-label={t.header.theme}
           >
             {isDarkMode ? (
@@ -97,7 +97,7 @@ const Header = ({ toggleSidebar, isDarkMode, setIsDarkMode }) => {
           <button
             type="button"
             onClick={() => navigate('/notifications')}
-            className="relative rounded-lg border border-gray-200 bg-white p-2 text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-300 dark:hover:bg-gray-800"
+            className="relative rounded-full border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800"
             aria-label={t.header.notifications}
           >
             <BellIcon className="h-5 w-5" />
@@ -108,10 +108,10 @@ const Header = ({ toggleSidebar, isDarkMode, setIsDarkMode }) => {
             <button
               type="button"
               onClick={() => setShowDropdown((current) => !current)}
-              className={`flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-2 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:hover:bg-gray-800 ${isRtl ? 'flex-row-reverse' : ''}`}
+              className={`flex items-center gap-2 rounded-full border border-slate-200 bg-white p-2 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-800 ${isRtl ? 'flex-row-reverse' : ''}`}
               aria-label={t.header.profile}
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--brand-primary)]">
                 <span className="text-sm font-bold text-white">{userInitial}</span>
               </div>
               <div className={`hidden md:block ${isRtl ? 'text-right' : 'text-start'}`}>

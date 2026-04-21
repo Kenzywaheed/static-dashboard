@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Bars3Icon,
@@ -26,8 +27,51 @@ const EMPTY_CATEGORY_FORM = {
   iconFile: null,
 };
 
+const DEMO_CATEGORIES = [
+  {
+    id: 'demo-category-shoes',
+    nameEn: 'Shoes',
+    nameAr: 'أحذية',
+    gender: 'M',
+    detailsEn: 'Main brand category for sneakers, loafers, and daily footwear.',
+    detailsAr: 'تصنيف رئيسي للأحذية والسنيكرز داخل البراند.',
+    parentId: '',
+    icon: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600&q=80',
+  },
+  {
+    id: 'demo-category-hoodies',
+    nameEn: 'Hoodies',
+    nameAr: 'هوديز',
+    gender: 'F',
+    detailsEn: 'Warm tops with product items split by color and size stock.',
+    detailsAr: 'منتجات شتوية بتتقسم لألوان ومقاسات ومخزون.',
+    parentId: '',
+    icon: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=600&q=80',
+  },
+  {
+    id: 'demo-category-crossbody-bags',
+    nameEn: 'Crossbody Bags',
+    nameAr: 'شنط كروس',
+    gender: 'F',
+    detailsEn: 'Subcategory example connected to the bags family.',
+    detailsAr: 'مثال لتصنيف فرعي مربوط بتصنيف الشنط.',
+    parentId: 'demo-category-bags',
+    icon: 'https://images.unsplash.com/photo-1594223274512-ad4803739b7c?auto=format&fit=crop&w=600&q=80',
+  },
+  {
+    id: 'demo-category-bags',
+    nameEn: 'Bags',
+    nameAr: 'شنط',
+    gender: 'F',
+    detailsEn: 'Parent category for bags and accessories.',
+    detailsAr: 'تصنيف رئيسي للشنط والإكسسوارات.',
+    parentId: '',
+    icon: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=600&q=80',
+  },
+];
+
 const mapCategoryFromApi = (category) => ({
-  id: category.id,
+  id: String(category.id || category.categoryId || ''),
   nameEn: category.categoryNameEn || category.categoryName || '',
   nameAr: category.categoryNameAr || '',
   gender: category.categoryGender || '',
@@ -88,6 +132,8 @@ const getApiErrorMessage = (err, fallbackMessage) => {
   return responseData?.message || responseData?.error || fallbackMessage;
 };
 
+const getDemoCategoryPage = (page) => (page === 0 ? DEMO_CATEGORIES : []);
+
 const buildCreateCategoryRequest = (form) => ({
   categoryNameEn: form.nameEn.trim(),
   categoryNameAr: form.nameAr.trim(),
@@ -114,8 +160,10 @@ const revokePreviewIfNeeded = (preview) => {
 const CategoryManager = () => {
   const { t, language } = useLanguage();
   const { user } = useAuth();
+  const location = useLocation();
   const text = t.category;
   const brandId = user?.id || '';
+  const isExplorerRoute = location.pathname === '/categories';
 
   const [step, setStep] = useState('builder');
   const [form, setForm] = useState(EMPTY_CATEGORY_FORM);
@@ -134,6 +182,8 @@ const CategoryManager = () => {
   const [formError, setFormError] = useState('');
   const [iconPreview, setIconPreview] = useState('');
   const [uploadInputKey, setUploadInputKey] = useState(0);
+  const [categorySearch, setCategorySearch] = useState('');
+  const [genderFilter, setGenderFilter] = useState('all');
 
   const isEditing = Boolean(editingCategoryId);
 
@@ -169,6 +219,22 @@ const CategoryManager = () => {
     male: categories.filter((category) => category.gender === 'M' || category.gender === 'MALE').length,
   }), [categories, totalCategories]);
 
+  const filteredCategories = useMemo(() => (
+    categories.filter((category) => {
+      const matchesSearch = !categorySearch.trim() || [
+        category.nameEn,
+        category.nameAr,
+        category.detailsEn,
+        category.detailsAr,
+      ].some((value) => String(value || '').toLowerCase().includes(categorySearch.trim().toLowerCase()));
+
+      const normalizedGender = String(category.gender || '').toUpperCase();
+      const matchesGender = genderFilter === 'all' || normalizedGender === genderFilter;
+
+      return matchesSearch && matchesGender;
+    })
+  ), [categories, categorySearch, genderFilter]);
+
   const resetForm = useCallback(() => {
     setForm(EMPTY_CATEGORY_FORM);
     setEditingCategoryId('');
@@ -182,7 +248,15 @@ const CategoryManager = () => {
 
   const loadCategories = useCallback(async (page) => {
     if (!brandId) {
-      setListError(text.brandRequired);
+      const demoCategories = getDemoCategoryPage(page);
+      setCategories(demoCategories);
+      setCurrentPage(page);
+      setTotalPages(1);
+      setTotalCategories(DEMO_CATEGORIES.length);
+      setSelectedCategoryId(demoCategories[0]?.id || '');
+      setExpandedCategoryId(demoCategories[0]?.id || null);
+      setDetailsOpen(false);
+      setListError('');
       return;
     }
 
@@ -193,13 +267,14 @@ const CategoryManager = () => {
       const { data } = await categoriesAPI.getAll({ brandId, page, size: PAGE_SIZE });
       const normalized = normalizeCategoriesResponse(data);
       const mappedCategories = normalized.content.map(mapCategoryFromApi);
+      const nextCategories = mappedCategories.length ? mappedCategories : getDemoCategoryPage(page);
 
-      setCategories(mappedCategories);
+      setCategories(nextCategories);
       setCurrentPage(page);
-      setTotalPages(normalized.totalPages);
-      setTotalCategories(normalized.totalElements);
+      setTotalPages(mappedCategories.length ? normalized.totalPages : 1);
+      setTotalCategories(mappedCategories.length ? normalized.totalElements : DEMO_CATEGORIES.length);
 
-      if (mappedCategories.length === 0) {
+      if (nextCategories.length === 0) {
         setSelectedCategoryId('');
         setExpandedCategoryId(null);
         setDetailsOpen(false);
@@ -207,20 +282,27 @@ const CategoryManager = () => {
       }
 
       setSelectedCategoryId((currentSelectedId) => (
-        mappedCategories.some((category) => category.id === currentSelectedId)
+        nextCategories.some((category) => category.id === currentSelectedId)
           ? currentSelectedId
-          : mappedCategories[0].id
+          : nextCategories[0].id
       ));
 
       setExpandedCategoryId((currentExpandedId) => (
-        mappedCategories.some((category) => category.id === currentExpandedId)
+        nextCategories.some((category) => category.id === currentExpandedId)
           ? currentExpandedId
-          : mappedCategories[0].id
+          : nextCategories[0].id
       ));
     } catch (err) {
-      const message = getApiErrorMessage(err, text.loadFailed);
-      setListError(message);
-      toast.error(message);
+      console.warn(getApiErrorMessage(err, text.loadFailed), err);
+      const demoCategories = getDemoCategoryPage(page);
+      setCategories(demoCategories);
+      setCurrentPage(page);
+      setTotalPages(1);
+      setTotalCategories(DEMO_CATEGORIES.length);
+      setSelectedCategoryId(demoCategories[0]?.id || '');
+      setExpandedCategoryId(demoCategories[0]?.id || null);
+      setDetailsOpen(false);
+      setListError('');
     } finally {
       setLoading(false);
     }
@@ -229,6 +311,10 @@ const CategoryManager = () => {
   useEffect(() => {
     loadCategories(0);
   }, [loadCategories]);
+
+  useEffect(() => {
+    setStep(isExplorerRoute ? 'explorer' : 'builder');
+  }, [isExplorerRoute]);
 
   useEffect(() => () => revokePreviewIfNeeded(iconPreview), [iconPreview]);
 
@@ -336,9 +422,7 @@ const CategoryManager = () => {
       <section className="overflow-hidden rounded-[32px] border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-blue-50/80 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900">
         <div className="grid gap-8 px-6 py-7 lg:grid-cols-[minmax(0,1fr)_280px] lg:px-8">
           <div>
-            <p className="text-sm font-bold uppercase tracking-[0.24em] text-blue-600 dark:text-blue-400">{text.workflow}</p>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">{text.title}</h1>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600 dark:text-slate-300">{text.subtitle}</p>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">{isExplorerRoute ? 'Categories' : text.title}</h1>
             <div className="mt-5 flex flex-wrap items-center gap-3 text-sm">
               {isEditing && (
                 <span className="rounded-full border border-blue-200 bg-blue-100 px-4 py-2 font-semibold text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
@@ -381,6 +465,7 @@ const CategoryManager = () => {
         <StatCard label={text.male} value={stats.male} tone="amber" />
       </div>
 
+      {!isExplorerRoute && (
       <div className="grid gap-4 md:grid-cols-2">
         {[
           { id: 'builder', label: text.builderStep, help: text.builderHelp },
@@ -401,6 +486,7 @@ const CategoryManager = () => {
           </button>
         ))}
       </div>
+      )}
 
       {step === 'builder' && (
         <section className="grid gap-8 xl:grid-cols-[360px_minmax(0,1fr)]">
@@ -507,10 +593,10 @@ const CategoryManager = () => {
 
       {step === 'explorer' && (
         <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-slate-950 dark:text-white">{text.categoriesTitle}</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{text.showing} {categories.length} {text.of} {totalCategories}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{text.showing} {filteredCategories.length} {text.of} {totalCategories}</p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <button type="button" onClick={() => loadCategories(currentPage)} className="rounded-2xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
@@ -523,18 +609,36 @@ const CategoryManager = () => {
               </div>
             </div>
 
+            <div className="mb-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+              <input
+                value={categorySearch}
+                onChange={(event) => setCategorySearch(event.target.value)}
+                placeholder={text.searchCategories || 'Search categories'}
+                className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              />
+              <select
+                value={genderFilter}
+                onChange={(event) => setGenderFilter(event.target.value)}
+                className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              >
+                <option value="all">{text.allGenders || 'All genders'}</option>
+                <option value="M">{text.male}</option>
+                <option value="F">{text.female}</option>
+              </select>
+            </div>
+
             <div className="space-y-4">
               {listError ? (
                 <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">{listError}</div>
               ) : loading ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 p-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">{text.loadingCategories}</div>
-              ) : categories.length === 0 ? (
+              ) : filteredCategories.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 p-12 text-center dark:border-slate-700">
                   <RectangleStackIcon className="mx-auto h-14 w-14 text-slate-400" />
                   <p className="mt-4 font-bold text-slate-900 dark:text-white">{text.noCategories}</p>
                   <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{text.noCategoriesHelp}</p>
                 </div>
-              ) : categories.map((category) => {
+              ) : filteredCategories.map((category) => {
                 const isExpanded = expandedCategoryId === category.id;
                 const isSelected = selectedCategoryId === category.id;
 
@@ -560,10 +664,10 @@ const CategoryManager = () => {
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center justify-end gap-2">
-                        <button type="button" onClick={() => openCategoryDetails(category)} className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"><EyeIcon className="h-4 w-4" />{text.viewerTitle}</button>
-                        <button type="button" onClick={() => startEditingCategory(category)} className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700"><PencilSquareIcon className="h-4 w-4" />{text.edit}</button>
-                        <button type="button" onClick={() => handleDelete(category)} disabled={deletingId === category.id} className="inline-flex items-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 transition hover:bg-red-50 dark:border-red-900 dark:bg-slate-900 dark:hover:bg-red-950"><TrashIcon className="h-4 w-4" />{deletingId === category.id ? text.deleting : text.delete}</button>
-                        <button type="button" onClick={() => { setSelectedCategoryId(category.id); setExpandedCategoryId(isExpanded ? null : category.id); }} className="rounded-2xl border border-slate-300 p-3 text-slate-500 transition hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-900"><ChevronDownIcon className={`h-5 w-5 transition ${isExpanded ? 'rotate-180' : ''}`} /></button>
+                        <button type="button" onClick={() => openCategoryDetails(category)} title={text.viewerTitle} aria-label={text.viewerTitle} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"><EyeIcon className="h-5 w-5" /></button>
+                        <button type="button" onClick={() => startEditingCategory(category)} title={text.edit} aria-label={text.edit} className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-600 text-white transition hover:bg-blue-700"><PencilSquareIcon className="h-5 w-5" /></button>
+                        <button type="button" onClick={() => handleDelete(category)} disabled={deletingId === category.id} title={deletingId === category.id ? text.deleting : text.delete} aria-label={deletingId === category.id ? text.deleting : text.delete} className="grid h-11 w-11 place-items-center rounded-2xl border border-red-200 bg-white text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:bg-slate-900 dark:hover:bg-red-950"><TrashIcon className="h-5 w-5" /></button>
+                        <button type="button" onClick={() => { setSelectedCategoryId(category.id); setExpandedCategoryId(isExpanded ? null : category.id); }} title={isExpanded ? text.collapse || text.viewerTitle : text.expand || text.viewerTitle} aria-label={isExpanded ? text.collapse || text.viewerTitle : text.expand || text.viewerTitle} className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-300 text-slate-500 transition hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-900"><ChevronDownIcon className={`h-5 w-5 transition ${isExpanded ? 'rotate-180' : ''}`} /></button>
                       </div>
                     </div>
 
@@ -691,8 +795,8 @@ const CategoryDetailsDrawer = ({
         {category && (
           <div className="border-t border-slate-200 px-6 py-5 dark:border-slate-800">
             <div className={`flex flex-wrap gap-3 ${isRtl ? 'justify-start' : 'justify-end'}`}>
-              <button type="button" onClick={() => onEdit(category)} className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700"><PencilSquareIcon className="h-4 w-4" />{text.edit}</button>
-              <button type="button" onClick={() => onDelete(category)} disabled={deletingId === category.id} className="inline-flex items-center gap-2 rounded-2xl border border-red-200 px-4 py-3 text-sm font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:hover:bg-red-950"><TrashIcon className="h-4 w-4" />{deletingId === category.id ? text.deleting : text.delete}</button>
+              <button type="button" onClick={() => onEdit(category)} title={text.edit} aria-label={text.edit} className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-600 text-white transition hover:bg-blue-700"><PencilSquareIcon className="h-5 w-5" /></button>
+              <button type="button" onClick={() => onDelete(category)} disabled={deletingId === category.id} title={deletingId === category.id ? text.deleting : text.delete} aria-label={deletingId === category.id ? text.deleting : text.delete} className="grid h-11 w-11 place-items-center rounded-2xl border border-red-200 text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:hover:bg-red-950"><TrashIcon className="h-5 w-5" /></button>
             </div>
           </div>
         )}

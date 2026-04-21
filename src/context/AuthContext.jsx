@@ -30,6 +30,27 @@ const createBrandUser = (email, tokenPayload = {}) => ({
   role: tokenPayload.role || 'BRAND_OWNER',
 });
 
+const getTokenExpiry = (token) => {
+  const payload = parseJwtPayload(token);
+  const expiresAt = Number(payload?.exp);
+
+  if (!expiresAt) {
+    return null;
+  }
+
+  return expiresAt * 1000;
+};
+
+const isTokenExpired = (token, bufferMs = 15000) => {
+  const expiresAt = getTokenExpiry(token);
+
+  if (!expiresAt) {
+    return false;
+  }
+
+  return Date.now() >= expiresAt - bufferMs;
+};
+
 const readStoredSession = () => {
   const storedSession = localStorage.getItem(AUTH_STORAGE_KEY);
 
@@ -62,7 +83,7 @@ const readStoredSession = () => {
 
 export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(readStoredSession);
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [pendingEmail, setPendingEmail] = useState('');
 
   useEffect(() => {
@@ -79,6 +100,15 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
+  const logout = useCallback(() => {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+    setSession(null);
+    setPendingEmail('');
+  }, []);
+
   const saveSession = useCallback((nextSession) => {
     const normalizedSession = {
       ...nextSession,
@@ -92,6 +122,90 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('user', JSON.stringify(normalizedSession.user));
     setSession(normalizedSession);
   }, []);
+
+  const refreshSession = useCallback(async (storedSession) => {
+    const refreshToken = storedSession?.refreshToken || '';
+
+    if (!refreshToken) {
+      logout();
+      return null;
+    }
+
+    const { data } = await authAPI.refreshToken(refreshToken);
+    const nextAccessToken = data?.accessToken || '';
+    const nextRefreshToken = data?.refreshToken || refreshToken;
+
+    if (!nextAccessToken) {
+      throw new Error('Refresh response did not include an access token');
+    }
+
+    const tokenPayload = parseJwtPayload(nextAccessToken) || {};
+    const email = tokenPayload.email || storedSession?.user?.email;
+
+    if (!email) {
+      throw new Error('Unable to resolve user email from refreshed session');
+    }
+
+    const nextSession = {
+      ...storedSession,
+      accessToken: nextAccessToken,
+      refreshToken: nextRefreshToken,
+      user: createBrandUser(email, tokenPayload),
+    };
+
+    saveSession(nextSession);
+    return nextSession;
+  }, [logout, saveSession]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const initializeSession = async () => {
+      const storedSession = readStoredSession();
+
+      if (!storedSession) {
+        if (isMounted) {
+          setSession(null);
+          setLoading(false);
+        }
+        return;
+      }
+
+      const shouldRefresh = !storedSession.accessToken || isTokenExpired(storedSession.accessToken);
+
+      if (!shouldRefresh) {
+        if (isMounted) {
+          setSession(storedSession);
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const nextSession = await refreshSession(storedSession);
+
+        if (isMounted) {
+          setSession(nextSession);
+        }
+      } catch (error) {
+        console.warn('Unable to refresh session during auth bootstrap:', error);
+
+        if (isMounted) {
+          logout();
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    initializeSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [logout, refreshSession]);
 
   const requestBrandOtp = useCallback(async (email) => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -171,15 +285,6 @@ export const AuthProvider = ({ children }) => {
       };
     }
   }, [saveSession]);
-
-  const logout = useCallback(() => {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
-    setSession(null);
-    setPendingEmail('');
-  }, []);
 
   const value = useMemo(() => ({
     user: session?.user || null,

@@ -1,98 +1,69 @@
+import { LanguageIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircleIcon, LanguageIcon, SparklesIcon } from '@heroicons/react/24/outline';
-import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../hooks/useLanguage';
 import { usePalette } from '../hooks/usePalette';
 
 const BrandSetup = () => {
-  const { user } = useAuth();
-  const { language, setLanguage, t } = useLanguage();
+  const { language, setLanguage } = useLanguage();
   const { palette, palettes, setPalette } = usePalette();
   const navigate = useNavigate();
-  const text = t.setup;
 
   return (
-    <div className="min-h-screen bg-gray-50 px-5 py-8 text-gray-950 dark:bg-gray-950 dark:text-white sm:px-8">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col">
-        <header className="flex items-center justify-between gap-4">
-          <div className="inline-flex items-center gap-2 rounded-lg bg-[var(--brand-primary-soft)] px-4 py-2 text-sm font-bold text-[var(--brand-primary-dark)]">
-            <SparklesIcon className="h-5 w-5" />
-            {text.badge}
-          </div>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(15,118,110,0.14),_transparent_24%),linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)] px-5 py-8 text-slate-950 dark:bg-[radial-gradient(circle_at_top_left,_rgba(15,118,110,0.18),_transparent_24%),linear-gradient(180deg,#020617_0%,#0f172a_100%)] dark:text-white sm:px-8">
+      <div className="mx-auto max-w-6xl">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-slate-950 dark:text-white">Choose your palette</h1>
           <button
             type="button"
             onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           >
             <LanguageIcon className="h-5 w-5" />
             {language === 'en' ? 'AR' : 'EN'}
           </button>
-        </header>
+        </div>
 
-        <main className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[minmax(0,1fr)_440px]">
-          <section>
-            <p className="text-sm font-bold uppercase text-[var(--brand-primary)]">{text.kicker}</p>
-            <h1 className="mt-4 text-4xl font-bold leading-tight text-gray-950 dark:text-white lg:text-6xl">
-              {text.title}
-            </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-gray-600 dark:text-gray-300">
-              {text.subtitle}
-            </p>
-            <p className="mt-5 max-w-2xl text-base leading-8 text-gray-500 dark:text-gray-400">
-              {text.brandPromise}
-            </p>
+        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">Pick one theme once, then continue to the dashboard.</p>
 
-            <div className="mt-8 rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-900">
-              <p className="text-sm font-bold text-gray-500 dark:text-gray-400">{text.signedIn}</p>
-              <p className="mt-2 break-all text-lg font-bold text-gray-950 dark:text-white">{user?.email}</p>
-            </div>
-          </section>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          {palettes.map((option) => {
+            const isSelected = option.id === palette.id;
 
-          <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-xl shadow-gray-950/5 dark:border-gray-700 dark:bg-gray-900">
-            <h2 className="text-2xl font-bold text-gray-950 dark:text-white">{text.paletteTitle}</h2>
-            <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">{text.paletteSubtitle}</p>
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setPalette(option.id)}
+                className={`rounded-[24px] border p-4 text-left transition ${
+                  isSelected
+                    ? 'border-[var(--brand-primary)] bg-white shadow-md dark:bg-slate-900'
+                    : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-bold text-slate-950 dark:text-white">{option.name}</p>
+                  {isSelected && <CheckCircleIcon className="h-5 w-5 text-[var(--brand-primary)]" />}
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <span className="h-14 rounded-2xl" style={{ backgroundColor: option.primary }} />
+                  <span className="h-14 rounded-2xl" style={{ backgroundColor: option.primaryDark }} />
+                  <span className="h-14 rounded-2xl" style={{ backgroundColor: option.primarySoft }} />
+                  <span className="h-14 rounded-2xl" style={{ backgroundColor: option.sidebar }} />
+                </div>
+              </button>
+            );
+          })}
+        </div>
 
-            <div className="mt-6 space-y-4">
-              {palettes.map((option) => {
-                const isSelected = option.id === palette.id;
-
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => setPalette(option.id)}
-                    className={`w-full rounded-lg border p-4 text-start transition ${
-                      isSelected
-                        ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-soft)]'
-                        : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-950'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="font-bold text-gray-950 dark:text-white">{text.palettes[option.id]?.name || option.name}</p>
-                        <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">{text.palettes[option.id]?.description || option.description}</p>
-                      </div>
-                      {isSelected && <CheckCircleIcon className="h-7 w-7 flex-shrink-0 text-[var(--brand-primary)]" />}
-                    </div>
-                    <div className="mt-4 flex gap-2">
-                      {[option.primary, option.primaryDark, option.primarySoft, option.sidebar].map((color) => (
-                        <span key={color} className="h-8 flex-1 rounded" style={{ backgroundColor: color }} />
-                      ))}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => navigate('/dashboard', { replace: true })}
-              className="mt-8 w-full rounded-lg bg-[var(--brand-primary)] px-6 py-4 font-bold text-white shadow-lg transition hover:bg-[var(--brand-primary-dark)]"
-            >
-              {text.continue}
-            </button>
-          </section>
-        </main>
+        <div className="mt-8 flex justify-end">
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard', { replace: true })}
+            className="rounded-2xl bg-[var(--brand-primary)] px-6 py-3 font-bold text-white shadow-lg transition hover:bg-[var(--brand-primary-dark)]"
+          >
+            Continue
+          </button>
+        </div>
       </div>
     </div>
   );

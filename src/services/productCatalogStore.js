@@ -64,7 +64,7 @@ export const createLocalProduct = (product) => ({
 
 export const createLocalProductItem = (item) => ({
   ...item,
-  id: makeId(),
+  id: item.id || makeId(),
 });
 
 export const toBackendProductPayload = (product) => ({
@@ -81,15 +81,15 @@ export const toBackendProductItemPayload = (product) => ({
   productId: product.id,
   productItemList: (product.productItems || []).map((item) => ({
     color: item.colorName || item.colorHex,
-    size: Object.entries(item.sizes || {})
+    colorCode: item.colorHex,
+    sizeAndStockList: Object.entries(item.sizes || {})
       .filter(([, stock]) => Number(stock) > 0)
       .map(([sizeName, stock]) => ({
         sizeName,
         stock: Number(stock),
       })),
     stock: getProductItemStock(item),
-    price: Number(item.price || product.price || 0),
     sku: item.sku,
-    imagesOfProductItem: item.imageFiles || [],
+    productItemImages: item.imageFiles || [],
   })),
 });

@@ -1,198 +1,214 @@
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
-  BarChart,
-  Bar,
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
 } from 'recharts';
 import {
-  CurrencyDollarIcon,
-  ShoppingCartIcon,
-  TagIcon,
-  UserGroupIcon,
+  BanknotesIcon,
+  ClipboardDocumentListIcon,
+  ExclamationTriangleIcon,
+  TruckIcon,
 } from '@heroicons/react/24/outline';
-import { useLanguage } from '../hooks/useLanguage';
 
-// Static data - no API calls
-const staticStats = [
-  { labelKey: 'totalSales', value: '$125,000', icon: CurrencyDollarIcon, color: 'bg-blue-500' },
-  { labelKey: 'totalOrders', value: '1,250', icon: ShoppingCartIcon, color: 'bg-green-500' },
-  { labelKey: 'discountedAmount', value: '$12,500', icon: TagIcon, color: 'bg-purple-500' },
-  { labelKey: 'totalCosts', value: '$45,000', icon: UserGroupIcon, color: 'bg-orange-500' },
-];
+const EMPTY_SUMMARY = {
+  totalRevenue: 0,
+  totalOrders: 0,
+  pendingOrders: 0,
+  deliveredOrders: 0,
+  cancelledOrders: 0,
+  lowStockProductItems: 0,
+  salesTimeline: [],
+  recentOrders: [],
+};
 
-const staticReports = [
-  { labelKey: 'customers', value: '850' },
-  { labelKey: 'totalProducts', value: '156' },
-  { labelKey: 'stockProducts', value: '120' },
-  { labelKey: 'outOfStock', value: '36' },
-  { labelKey: 'revenue', value: '$98,500' },
-];
+const money = (value) => new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+}).format(Number(value || 0));
 
-const staticCategories = [
-  { name: 'Electronics', value: 35 },
-  { name: 'Clothing', value: 28 },
-  { name: 'Home & Garden', value: 20 },
-  { name: 'Sports', value: 12 },
-  { name: 'Others', value: 5 },
-];
+const formatDay = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date);
+};
 
-const staticUsersStats = [
-  { time: '10:00', users: 45 },
-  { time: '10:05', users: 52 },
-  { time: '10:10', users: 48 },
-  { time: '10:15', users: 65 },
-  { time: '10:20', users: 72 },
-  { time: '10:25', users: 68 },
-  { time: '10:30', users: 85 },
-];
-
-const staticTransactions = [
-  { id: 'ORD-001', customer: 'John Doe', date: '2024-01-15', amount: '$125.00', statusKey: 'completed' },
-  { id: 'ORD-002', customer: 'Jane Smith', date: '2024-01-15', amount: '$89.99', statusKey: 'processing' },
-  { id: 'ORD-003', customer: 'Mike Johnson', date: '2024-01-14', amount: '$250.00', statusKey: 'completed' },
-  { id: 'ORD-004', customer: 'Sarah Williams', date: '2024-01-14', amount: '$45.00', statusKey: 'pending' },
-  { id: 'ORD-005', customer: 'Tom Brown', date: '2024-01-13', amount: '$175.50', statusKey: 'completed' },
-];
-
-const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+const statusTone = (status) => {
+  switch (String(status || '').toUpperCase()) {
+    case 'DELIVERED':
+      return 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:ring-emerald-900';
+    case 'SHIPPED':
+      return 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-950/40 dark:text-sky-200 dark:ring-sky-900';
+    case 'CANCELLED':
+      return 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-200 dark:ring-rose-900';
+    default:
+      return 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-900';
+  }
+};
 
 const Dashboard = () => {
-  const { t } = useLanguage();
-  const pageText = t.dashboard;
+  const {
+    data: summary,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ['brand-dashboard-summary'],
+    queryFn: async () => EMPTY_SUMMARY,
+  });
+
+  const salesTimeline = useMemo(() => (
+    (summary?.salesTimeline || []).map((point) => ({
+      label: formatDay(point.date),
+      revenue: Number(point.revenue || 0),
+      orders: Number(point.ordersCount || 0),
+    }))
+  ), [summary?.salesTimeline]);
+
+  const stats = [
+    {
+      label: 'Total revenue',
+      value: money(summary?.totalRevenue),
+      help: 'Confirmed sales volume',
+      icon: BanknotesIcon,
+      accent: 'from-emerald-500 to-teal-500',
+    },
+    {
+      label: 'Total orders',
+      value: summary?.totalOrders ?? 0,
+      help: 'Orders the brand has received',
+      icon: ClipboardDocumentListIcon,
+      accent: 'from-sky-500 to-indigo-500',
+    },
+    {
+      label: 'Pending orders',
+      value: summary?.pendingOrders ?? 0,
+      help: 'Waiting for the next action',
+      icon: TruckIcon,
+      accent: 'from-amber-500 to-orange-500',
+    },
+    {
+      label: 'Low stock items',
+      value: summary?.lowStockProductItems ?? 0,
+      help: 'Inventory to review soon',
+      icon: ExclamationTriangleIcon,
+      accent: 'from-rose-500 to-pink-500',
+    },
+  ];
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="max-w-3xl">
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-white">{pageText.title}</h1>
-          <p className="mt-2 leading-7 text-gray-500 dark:text-gray-400">{pageText.welcome}</p>
-        </div>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-950 dark:text-white">Dashboard</h1>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {staticStats.map((stat, index) => (
-          <div key={index} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{pageText[stat.labelKey]}</p>
-                <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">{stat.value}</p>
-              </div>
-              <div className={`p-3 rounded-lg ${stat.color}`}>
-                <stat.icon className="h-6 w-6 text-white" />
+      {isLoading ? (
+        <div className="rounded-[28px] border border-dashed border-slate-300 p-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+          Loading dashboard summary...
+        </div>
+      ) : isError ? (
+        <div className="rounded-[28px] border border-red-200 bg-red-50 p-6 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+          <p className="font-semibold">We could not load the dashboard summary.</p>
+          <button type="button" onClick={() => refetch()} className="mt-3 rounded-xl bg-red-600 px-4 py-2 text-white">
+            Try again
+          </button>
+        </div>
+      ) : (
+        <>
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {stats.map((stat) => (
+              <article key={stat.label} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">{stat.label}</p>
+                    <p className="mt-3 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">{stat.value}</p>
+                  </div>
+                  <div className={`rounded-2xl bg-gradient-to-br p-3 text-white shadow-lg ${stat.accent}`}>
+                    <stat.icon className="h-6 w-6" />
+                  </div>
+                </div>
+              </article>
+            ))}
+          </section>
+
+          <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <h2 className="mb-4 text-xl font-bold text-slate-950 dark:text-white">Revenue</h2>
+
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={salesTimeline}>
+                    <defs>
+                      <linearGradient id="salesArea" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--brand-primary)" stopOpacity={0.42} />
+                        <stop offset="95%" stopColor="var(--brand-primary)" stopOpacity={0.04} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" opacity={0.35} />
+                    <XAxis dataKey="label" stroke="#94a3b8" />
+                    <YAxis stroke="#94a3b8" />
+                    <Tooltip />
+                    <Area type="monotone" dataKey="revenue" stroke="var(--brand-primary)" fill="url(#salesArea)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
 
-      {/* Reports Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">{pageText.reports}</h2>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          {staticReports.map((report, index) => (
-            <div key={index} className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <p className="text-sm text-gray-500 dark:text-gray-400">{pageText[report.labelKey]}</p>
-              <p className="text-xl font-bold text-gray-800 dark:text-white mt-1">{report.value}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+            <aside className="space-y-6">
+              <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <h2 className="text-xl font-bold text-slate-950 dark:text-white">Status snapshot</h2>
+                <div className="mt-5 space-y-3">
+                  {[
+                    ['Pending', summary?.pendingOrders ?? 0],
+                    ['Delivered', summary?.deliveredOrders ?? 0],
+                    ['Cancelled', summary?.cancelledOrders ?? 0],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm dark:bg-slate-950">
+                      <span className="font-semibold text-slate-600 dark:text-slate-300">{label}</span>
+                      <span className="text-lg font-bold text-slate-950 dark:text-white">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Selling Categories */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">{pageText.topCategories}</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={staticCategories}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {staticCategories.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Users Stats */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">{pageText.usersPerMinute}</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={staticUsersStats}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="time" stroke="#9CA3AF" />
-              <YAxis stroke="#9CA3AF" />
-              <Tooltip />
-              <Line type="monotone" dataKey="users" stroke="#3B82F6" strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Transactions Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">{pageText.lastTransactions}</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200 dark:border-gray-700">
-                <th className="text-start py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">{pageText.orderId}</th>
-                <th className="text-start py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">{pageText.customer}</th>
-                <th className="text-start py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">{pageText.date}</th>
-                <th className="text-start py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">{pageText.amount}</th>
-                <th className="text-start py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">{pageText.status}</th>
-                <th className="text-start py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400">{pageText.action}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {staticTransactions.map((transaction) => (
-                <tr key={transaction.id} className="border-b border-gray-100 dark:border-gray-700">
-                  <td className="py-3 px-4 text-sm text-gray-800 dark:text-gray-200">{transaction.id}</td>
-                  <td className="py-3 px-4 text-sm text-gray-800 dark:text-gray-200">{transaction.customer}</td>
-                  <td className="py-3 px-4 text-sm text-gray-800 dark:text-gray-200">{transaction.date}</td>
-                  <td className="py-3 px-4 text-sm text-gray-800 dark:text-gray-200">{transaction.amount}</td>
-                  <td className="py-3 px-4">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      transaction.statusKey === 'completed' ? 'bg-green-100 text-green-800' :
-                      transaction.statusKey === 'processing' ? 'bg-blue-100 text-blue-800' :
-                      'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {pageText[transaction.statusKey]}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <button className="text-blue-500 hover:text-blue-600 text-sm font-medium">
-                      {pageText.viewDetails}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <h2 className="text-xl font-bold text-slate-950 dark:text-white">Recent orders</h2>
+                <div className="mt-5 space-y-3">
+                  {(summary?.recentOrders || []).length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                      Recent orders will appear here when the brand starts receiving them.
+                    </div>
+                  ) : summary.recentOrders.map((order) => (
+                    <article key={order.orderId} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-bold text-slate-950 dark:text-white">{String(order.orderId).slice(0, 8)}</p>
+                          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{order.customerEmail}</p>
+                        </div>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${statusTone(order.orderStatus)}`}>
+                          {order.orderStatus}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                        <span>{formatDay(order.createdAt)}</span>
+                        <span>{money(order.totalPrice)}</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </aside>
+          </section>
+        </>
+      )}
     </div>
   );
 };
 
 export default Dashboard;
-

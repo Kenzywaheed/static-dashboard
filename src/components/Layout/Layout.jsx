@@ -31,7 +31,7 @@ const Layout = () => {
   }, [isDarkMode]);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)] transition-colors dark:bg-[linear-gradient(180deg,#020617_0%,#0f172a_100%)]">
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -43,14 +43,14 @@ const Layout = () => {
         <Sidebar isDarkMode={isDarkMode} onNavigate={() => setSidebarOpen(false)} />
       </div>
 
-      <div className={isRtl ? 'lg:mr-72' : 'lg:ml-72'}>
+      <div className={isRtl ? 'lg:mr-64' : 'lg:ml-64'}>
         <Header
           toggleSidebar={toggleSidebar}
           isDarkMode={isDarkMode}
           setIsDarkMode={setIsDarkMode}
         />
         
-        <main className="p-6 bg-gray-50 dark:bg-gray-900 min-h-[calc(100vh-80px)]">
+        <main className="min-h-[calc(100vh-80px)] p-6">
           <Outlet />
         </main>
       </div>
