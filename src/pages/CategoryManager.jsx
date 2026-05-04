@@ -163,7 +163,7 @@ const CategoryManager = () => {
   const location = useLocation();
   const text = t.category;
   const brandId = user?.id || '';
-  const isExplorerRoute = location.pathname === '/categories';
+  const isExplorerRoute = location.pathname === '/categories' || location.pathname === '/categories/view';
 
   const [step, setStep] = useState('builder');
   const [form, setForm] = useState(EMPTY_CATEGORY_FORM);

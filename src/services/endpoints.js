@@ -14,6 +14,37 @@ const apiClient = axios.create({
   baseURL: API_BASE_URL,
 });
 
+const parseJwtPayload = (token) => {
+  if (!token || typeof token !== 'string') {
+    return null;
+  }
+
+  const parts = token.split('.');
+
+  if (parts.length < 2) {
+    return null;
+  }
+
+  try {
+    const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+};
+
+const isTokenExpired = (token, bufferMs = 15000) => {
+  const payload = parseJwtPayload(token);
+  const expiresAt = Number(payload?.exp);
+
+  if (!expiresAt) {
+    return false;
+  }
+
+  return Date.now() >= (expiresAt * 1000) - bufferMs;
+};
+
 const redirectToLogin = () => {
   if (typeof window === 'undefined') {
     return;
@@ -159,9 +190,47 @@ const toProductItemPatchFormData = (data) => {
 
 let refreshPromise = null;
 
-apiClient.interceptors.request.use((config) => {
+const refreshAccessToken = async (session) => {
+  const refreshToken = session?.refreshToken;
+
+  if (!refreshToken) {
+    clearStoredSession();
+    throw new Error('No refresh token available');
+  }
+
+  if (!refreshPromise) {
+    refreshPromise = axios.post(`${OTP_BASE_URL}/refresh`, { refreshToken })
+      .then(({ data }) => {
+        const nextSession = {
+          ...session,
+          accessToken: data?.accessToken || '',
+          refreshToken: data?.refreshToken || refreshToken,
+        };
+
+        writeStoredSession(nextSession);
+        return nextSession.accessToken;
+      })
+      .catch((refreshError) => {
+        clearStoredSession();
+        throw refreshError;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
+};
+
+apiClient.interceptors.request.use(async (config) => {
   const session = readStoredSession();
   const accessToken = session?.accessToken || session?.token;
+
+  if (accessToken && isTokenExpired(accessToken) && session?.refreshToken) {
+    const nextAccessToken = await refreshAccessToken(session);
+    config.headers.Authorization = `Bearer ${nextAccessToken}`;
+    return config;
+  }
 
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
@@ -180,35 +249,7 @@ apiClient.interceptors.response.use(
     }
 
     const session = readStoredSession();
-    const refreshToken = session?.refreshToken;
-
-    if (!refreshToken) {
-      clearStoredSession();
-      throw error;
-    }
-
-    if (!refreshPromise) {
-      refreshPromise = axios.post(`${OTP_BASE_URL}/refresh`, { refreshToken })
-        .then(({ data }) => {
-          const nextSession = {
-            ...session,
-            accessToken: data?.accessToken || '',
-            refreshToken: data?.refreshToken || refreshToken,
-          };
-
-          writeStoredSession(nextSession);
-          return nextSession.accessToken;
-        })
-        .catch((refreshError) => {
-          clearStoredSession();
-          throw refreshError;
-        })
-        .finally(() => {
-          refreshPromise = null;
-        });
-    }
-
-    const nextAccessToken = await refreshPromise;
+    const nextAccessToken = await refreshAccessToken(session);
 
     originalRequest._retry = true;
     originalRequest.headers = originalRequest.headers || {};

@@ -1,98 +1,39 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  BellAlertIcon,
   BellIcon,
   CheckCircleIcon,
   MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline';
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { getNotificationsData } from '../services/dashboardMockData';
 
-const formatDateTime = (value) => {
-  if (!value) return 'Just now';
+const PAGE_SIZE = 5;
 
-  const date = new Date(value);
+const formatDateTime = (value) => new Intl.DateTimeFormat('en-GB', {
+  day: '2-digit',
+  month: 'short',
+  hour: 'numeric',
+  minute: '2-digit',
+}).format(new Date(value));
 
-  if (Number.isNaN(date.getTime())) {
-    return 'Just now';
-  }
-
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
+const typeTone = {
+  Inventory: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200',
+  Order: 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-200',
+  Payment: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200',
+  Catalog: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
 };
 
-const formatRelativeDay = (value) => {
-  if (!value) return 'Today';
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return 'Today';
-  }
-
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-  }).format(date);
-};
-
-const toTrendData = (notifications) => {
-  const counts = notifications.reduce((accumulator, notification) => {
-    const key = formatRelativeDay(notification.createdAt);
-    accumulator.set(key, (accumulator.get(key) || 0) + 1);
-    return accumulator;
-  }, new Map());
-
-  return Array.from(counts.entries())
-    .map(([day, total]) => ({ day, total }))
-    .slice(-7);
-};
-
-const getNotificationTone = (type) => {
-  const normalizedType = (type || '').toLowerCase();
-
-  if (normalizedType.includes('return')) {
-    return 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-900';
-  }
-
-  if (normalizedType.includes('payment')) {
-    return 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:ring-emerald-900';
-  }
-
-  if (normalizedType.includes('order')) {
-    return 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-950/40 dark:text-sky-200 dark:ring-sky-900';
-  }
-
-  return 'bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700';
-};
+const cardClass = 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900';
 
 const Notifications = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('all');
+  const [page, setPage] = useState(1);
 
-  const {
-    data: notifications = [],
-    isLoading,
-    isError,
-    refetch,
-  } = useQuery({
+  const { data: notifications = [] } = useQuery({
     queryKey: ['brand-notifications'],
-    queryFn: async () => [],
+    queryFn: async () => getNotificationsData(),
   });
-
-  const markReadMutation = { mutate: () => {} };
 
   const filteredNotifications = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -113,52 +54,47 @@ const Notifications = () => {
   }, [filter, notifications, searchTerm]);
 
   const unreadCount = notifications.filter((notification) => !notification.isRead).length;
-  const trendData = toTrendData(notifications);
+  const totalPages = Math.max(Math.ceil(filteredNotifications.length / PAGE_SIZE), 1);
+  const visibleNotifications = filteredNotifications.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <div className="space-y-6">
-      <section className="overflow-hidden rounded-[32px] border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-[var(--brand-primary-soft)]/40 p-6 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <p className="text-sm font-bold uppercase tracking-[0.24em] text-[var(--brand-primary)]">Alerts</p>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">Notifications</h1>
-            <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
-              Keep an eye on order changes, payment updates, and anything the brand should react to quickly.
-            </p>
-          </div>
-
-          <div className="inline-flex items-center gap-3 rounded-2xl border border-white/70 bg-white/80 px-4 py-3 text-sm font-semibold text-slate-700 backdrop-blur dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200">
-            <BellAlertIcon className="h-5 w-5 text-[var(--brand-primary)]" />
-            {unreadCount} unread
-          </div>
-        </div>
+    <div className="mx-auto max-w-7xl space-y-6">
+      <section className={cardClass}>
+        <p className="text-sm font-medium text-[var(--brand-primary)]">Updates</p>
+        <h1 className="mt-2 text-3xl font-semibold text-slate-950 dark:text-white">Notifications</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+          A simple inbox for order, inventory, payment, and catalog updates.
+        </p>
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className={cardClass}>
           <p className="text-sm text-slate-500 dark:text-slate-400">Total notifications</p>
-          <p className="mt-3 text-3xl font-bold text-slate-950 dark:text-white">{notifications.length}</p>
+          <p className="mt-3 text-3xl font-semibold text-slate-950 dark:text-white">{notifications.length}</p>
         </div>
-        <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className={cardClass}>
           <p className="text-sm text-slate-500 dark:text-slate-400">Unread</p>
-          <p className="mt-3 text-3xl font-bold text-[var(--brand-primary)]">{unreadCount}</p>
+          <p className="mt-3 text-3xl font-semibold text-slate-950 dark:text-white">{unreadCount}</p>
         </div>
-        <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className={cardClass}>
           <p className="text-sm text-slate-500 dark:text-slate-400">Read</p>
-          <p className="mt-3 text-3xl font-bold text-emerald-600 dark:text-emerald-300">{notifications.length - unreadCount}</p>
+          <p className="mt-3 text-3xl font-semibold text-slate-950 dark:text-white">{notifications.length - unreadCount}</p>
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className={cardClass}>
           <div className="mb-5 flex flex-col gap-4 lg:flex-row">
             <div className="relative flex-1">
               <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
               <input
                 value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search title, message, or type"
-                className="w-full rounded-2xl border border-slate-300 bg-white py-3 pl-10 pr-4 text-sm text-slate-900 outline-none transition focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                onChange={(event) => {
+                  setSearchTerm(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search notifications"
+                className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-10 pr-4 text-sm text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
               />
             </div>
 
@@ -167,11 +103,14 @@ const Notifications = () => {
                 <button
                   key={option}
                   type="button"
-                  onClick={() => setFilter(option)}
-                  className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${
+                  onClick={() => {
+                    setFilter(option);
+                    setPage(1);
+                  }}
+                  className={`rounded-xl px-4 py-3 text-sm font-medium transition ${
                     filter === option
-                      ? 'bg-[var(--brand-primary)] text-white'
-                      : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800'
+                      ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950'
+                      : 'border border-slate-300 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200'
                   }`}
                 >
                   {option[0].toUpperCase() + option.slice(1)}
@@ -180,107 +119,70 @@ const Notifications = () => {
             </div>
           </div>
 
-          {isLoading ? (
-            <div className="rounded-[24px] border border-dashed border-slate-300 p-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-              Loading notifications...
-            </div>
-          ) : isError ? (
-            <div className="rounded-[24px] border border-red-200 bg-red-50 p-6 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
-              <p className="font-semibold">We could not load notifications right now.</p>
-              <button type="button" onClick={() => refetch()} className="mt-3 rounded-xl bg-red-600 px-4 py-2 text-white">
-                Try again
-              </button>
-            </div>
-          ) : filteredNotifications.length === 0 ? (
-            <div className="rounded-[24px] border border-dashed border-slate-300 p-12 text-center dark:border-slate-700">
-              <BellIcon className="mx-auto h-12 w-12 text-slate-400" />
-              <p className="mt-4 text-lg font-bold text-slate-950 dark:text-white">Nothing matches this filter</p>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Try a different search term or switch between unread and read messages.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {filteredNotifications.map((notification) => (
-                <button
-                  key={notification.notificationId}
-                  type="button"
-                  onClick={() => {
-                    if (!notification.isRead) {
-                      markReadMutation.mutate(notification.notificationId);
-                    }
-                  }}
-                  className={`w-full rounded-[24px] border p-4 text-left transition ${
-                    notification.isRead
-                      ? 'border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950'
-                      : 'border-[var(--brand-primary)]/20 bg-[var(--brand-primary-soft)]/30 dark:border-[var(--brand-primary)]/30 dark:bg-[var(--brand-primary)]/10'
-                  }`}
-                >
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${getNotificationTone(notification.notificationType)}`}>
-                          {notification.notificationType || 'Notification'}
-                        </span>
-                        {!notification.isRead && (
-                          <span className="rounded-full bg-[var(--brand-primary)] px-2.5 py-1 text-[11px] font-bold text-white">
-                            New
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-3 text-base font-bold text-slate-950 dark:text-white">{notification.title || 'Untitled notification'}</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{notification.message || 'No details were provided for this notification.'}</p>
-                      {notification.referenceId && (
-                        <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                          Ref: {notification.referenceId}
-                        </p>
-                      )}
+          <div className="space-y-3">
+            {visibleNotifications.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center dark:border-slate-700">
+                <BellIcon className="mx-auto h-10 w-10 text-slate-400" />
+                <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">No notifications match the current filter.</p>
+              </div>
+            ) : visibleNotifications.map((notification) => (
+              <article key={notification.notificationId} className={`rounded-xl border p-4 ${notification.isRead ? 'border-slate-200 dark:border-slate-800' : 'border-[var(--brand-primary)]/30 bg-[var(--brand-primary-soft)]/20 dark:border-[var(--brand-primary)]/20 dark:bg-slate-800/60'}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${typeTone[notification.notificationType] || typeTone.Catalog}`}>
+                        {notification.notificationType}
+                      </span>
+                      {!notification.isRead && <span className="text-xs font-medium text-[var(--brand-primary)]">Unread</span>}
                     </div>
-
-                    <div className="flex flex-col items-start gap-2 lg:items-end">
-                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{formatDateTime(notification.createdAt)}</span>
-                      {notification.isRead && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200">
-                          <CheckCircleIcon className="h-4 w-4" />
-                          Read
-                        </span>
-                      )}
-                    </div>
+                    <p className="mt-3 font-medium text-slate-950 dark:text-white">{notification.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{notification.message}</p>
                   </div>
+                  {notification.isRead && <CheckCircleIcon className="h-5 w-5 text-emerald-500" />}
+                </div>
+                <div className="mt-4 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                  <span>{formatDateTime(notification.createdAt)}</span>
+                  <span>{notification.referenceId}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          {filteredNotifications.length > 0 && (
+            <div className="mt-6 flex items-center justify-between">
+              <p className="text-sm text-slate-500 dark:text-slate-400">Page {page} of {totalPages}</p>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setPage((current) => Math.max(current - 1, 1))} disabled={page === 1} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200">
+                  Previous
                 </button>
-              ))}
+                <button type="button" onClick={() => setPage((current) => Math.min(current + 1, totalPages))} disabled={page === totalPages} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200">
+                  Next
+                </button>
+              </div>
             </div>
           )}
         </div>
 
         <aside className="space-y-6">
-          <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-lg font-bold text-slate-950 dark:text-white">Notification trend</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-              A quick read on how many alerts landed in the last few days.
-            </p>
-            <div className="mt-5 h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trendData}>
-                  <defs>
-                    <linearGradient id="notificationTrend" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--brand-primary)" stopOpacity={0.45} />
-                      <stop offset="95%" stopColor="var(--brand-primary)" stopOpacity={0.04} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" opacity={0.35} />
-                  <XAxis dataKey="day" stroke="#94a3b8" />
-                  <YAxis allowDecimals={false} stroke="#94a3b8" />
-                  <Tooltip />
-                  <Area type="monotone" dataKey="total" stroke="var(--brand-primary)" fill="url(#notificationTrend)" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
+          <section className={cardClass}>
+            <h2 className="text-lg font-semibold text-slate-950 dark:text-white">What needs focus</h2>
+            <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              <p>Unread items stay highlighted until the real notifications API is connected.</p>
+              <p>Inventory and order changes are intentionally easier to scan than secondary catalog updates.</p>
             </div>
           </section>
 
-          <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="text-lg font-bold text-slate-950 dark:text-white">How this works</h2>
-            <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-              <p>Unread notifications are highlighted so the urgent ones stand out without overwhelming the rest of the page.</p>
-              <p>Unread notifications are highlighted here once the notifications API is enabled.</p>
+          <section className={cardClass}>
+            <h2 className="text-lg font-semibold text-slate-950 dark:text-white">Latest types</h2>
+            <div className="mt-4 space-y-3">
+              {['Inventory', 'Order', 'Payment', 'Catalog'].map((type) => (
+                <div key={type} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
+                  <span className="text-sm text-slate-600 dark:text-slate-300">{type}</span>
+                  <span className="font-medium text-slate-950 dark:text-white">
+                    {notifications.filter((notification) => notification.notificationType === type).length}
+                  </span>
+                </div>
+              ))}
             </div>
           </section>
         </aside>

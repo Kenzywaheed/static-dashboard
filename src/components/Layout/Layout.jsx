@@ -1,14 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useLanguage } from '../../hooks/useLanguage';
 
+const SIDEBAR_VISIBILITY_KEY = 'dashboardSidebarVisible';
+
 const Layout = () => {
   const { isRtl } = useLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(() => {
+    const stored = localStorage.getItem(SIDEBAR_VISIBILITY_KEY);
+    return stored === null ? true : JSON.parse(stored);
+  });
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    // Check localStorage or system preference
     const saved = localStorage.getItem('darkMode');
     if (saved !== null) {
       return JSON.parse(saved);
@@ -16,11 +21,6 @@ const Layout = () => {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
-
-  // Apply dark mode class to html element
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
@@ -30,27 +30,39 @@ const Layout = () => {
     localStorage.setItem('darkMode', JSON.stringify(isDarkMode));
   }, [isDarkMode]);
 
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_VISIBILITY_KEY, JSON.stringify(sidebarVisible));
+  }, [sidebarVisible]);
+
+  const desktopSidebarOffset = sidebarVisible ? (isRtl ? 'xl:mr-64' : 'xl:ml-64') : '';
+
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)] transition-colors dark:bg-[linear-gradient(180deg,#020617_0%,#0f172a_100%)]">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-950/40 xl:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      <div className={`fixed inset-y-0 z-50 transform transition-transform duration-300 lg:translate-x-0 ${isRtl ? 'right-0' : 'left-0'} ${sidebarOpen ? 'translate-x-0' : isRtl ? 'translate-x-full' : '-translate-x-full'}`}>
-        <Sidebar isDarkMode={isDarkMode} onNavigate={() => setSidebarOpen(false)} />
+      <div
+        className={`fixed inset-y-0 z-50 transition-transform duration-200 ${isRtl ? 'right-0' : 'left-0'} ${
+          sidebarOpen ? 'translate-x-0' : isRtl ? 'translate-x-full' : '-translate-x-full'
+        } ${sidebarVisible ? 'xl:translate-x-0' : isRtl ? 'xl:translate-x-full' : 'xl:-translate-x-full'}`}
+      >
+        <Sidebar onNavigate={() => setSidebarOpen(false)} />
       </div>
 
-      <div className={isRtl ? 'lg:mr-64' : 'lg:ml-64'}>
+      <div className={`min-h-screen transition-[margin] duration-200 ${desktopSidebarOffset}`}>
         <Header
-          toggleSidebar={toggleSidebar}
+          toggleMobileSidebar={() => setSidebarOpen((current) => !current)}
+          toggleDesktopSidebar={() => setSidebarVisible((current) => !current)}
+          sidebarVisible={sidebarVisible}
           isDarkMode={isDarkMode}
           setIsDarkMode={setIsDarkMode}
         />
-        
-        <main className="min-h-[calc(100vh-80px)] p-6">
+
+        <main className="px-4 py-6 sm:px-6">
           <Outlet />
         </main>
       </div>
@@ -59,4 +71,3 @@ const Layout = () => {
 };
 
 export default Layout;
-

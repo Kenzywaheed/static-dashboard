@@ -7,8 +7,10 @@ import {
   TruckIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
+import { getDashboardData, getOrdersData } from '../services/dashboardMockData';
 
 const ORDER_STATUSES = ['PENDING', 'PAID', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
+const PAGE_SIZE = 4;
 
 const money = (value) => new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -57,6 +59,7 @@ export default function OrderManagementLite() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedOrderId, setSelectedOrderId] = useState('');
+  const [page, setPage] = useState(1);
 
   const {
     data: orders = [],
@@ -65,19 +68,18 @@ export default function OrderManagementLite() {
     refetch,
   } = useQuery({
     queryKey: ['brand-orders', statusFilter],
-    queryFn: async () => [],
+    queryFn: async () => {
+      const allOrders = getOrdersData();
+      if (statusFilter === 'all') return allOrders;
+      return allOrders.filter((order) => order.orderStatus === statusFilter);
+    },
   });
 
   const {
     data: dashboardSummary,
   } = useQuery({
     queryKey: ['brand-dashboard-summary'],
-    queryFn: async () => ({
-      totalRevenue: 0,
-      totalOrders: 0,
-      pendingOrders: 0,
-      deliveredOrders: 0,
-    }),
+    queryFn: async () => getDashboardData().summary,
   });
 
   const updateStatusMutation = { isPending: false, mutate: () => {} };
@@ -97,6 +99,12 @@ export default function OrderManagementLite() {
       ].some((value) => String(value || '').toLowerCase().includes(normalizedSearch));
     });
   }, [orders, searchQuery]);
+
+  const totalPages = Math.max(Math.ceil(visibleOrders.length / PAGE_SIZE), 1);
+  const currentPage = Math.min(page, totalPages);
+  const pagedOrders = useMemo(() => (
+    visibleOrders.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  ), [currentPage, visibleOrders]);
 
   const statCards = [
     { label: 'Revenue', value: money(dashboardSummary?.totalRevenue), help: 'Delivered and paid flow' },
@@ -149,7 +157,10 @@ export default function OrderManagementLite() {
             <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
             <input
               value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
+              onChange={(event) => {
+                setSearchQuery(event.target.value);
+                setPage(1);
+              }}
               placeholder="Search by order id, customer email, or status"
               className="w-full rounded-2xl border border-slate-300 bg-white py-3 pl-10 pr-4 text-sm text-slate-900 outline-none transition focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
             />
@@ -159,7 +170,10 @@ export default function OrderManagementLite() {
             <FunnelIcon className="h-5 w-5 text-slate-400" />
             <select
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
+              onChange={(event) => {
+                setStatusFilter(event.target.value);
+                setPage(1);
+              }}
               className="bg-transparent py-3 text-sm font-semibold text-slate-700 outline-none dark:text-slate-200"
             >
               <option value="all">All statuses</option>
@@ -201,7 +215,7 @@ export default function OrderManagementLite() {
                 </tr>
               </thead>
               <tbody>
-                {visibleOrders.map((order) => (
+                {pagedOrders.map((order) => (
                   <tr key={order.orderId} className="border-t border-slate-200 dark:border-slate-800">
                     <td className="px-4 py-4">
                       <div className="text-sm font-bold text-slate-950 dark:text-white">{String(order.orderId).slice(0, 8)}</div>
@@ -243,6 +257,30 @@ export default function OrderManagementLite() {
           </div>
         )}
       </section>
+
+      {visibleOrders.length > 0 && (
+        <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-500 dark:text-slate-400">Page {currentPage} of {totalPages}</p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.max(current - 1, 1))}
+                  disabled={currentPage === 1}
+              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200"
+            >
+              Previous
+            </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.min(current + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className={`fixed inset-0 z-[80] transition ${selectedOrderId ? 'pointer-events-auto' : 'pointer-events-none'}`}>
         <div

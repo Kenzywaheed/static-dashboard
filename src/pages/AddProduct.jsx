@@ -129,6 +129,8 @@ const DEMO_PRODUCTS = [
   }),
 ];
 
+const PAGE_SIZE = 4;
+
 const makeFileKey = (file) => `${file.name}-${file.size}-${file.lastModified}`;
 
 const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
@@ -260,7 +262,8 @@ const AddProduct = () => {
   const [deletingItemId, setDeletingItemId] = useState('');
   const [productSearch, setProductSearch] = useState('');
   const [productCategoryFilter, setProductCategoryFilter] = useState('all');
-  const isCatalogRoute = location.pathname === '/products';
+  const [productPage, setProductPage] = useState(1);
+  const isCatalogRoute = location.pathname === '/products' || location.pathname === '/products/view';
 
   const currentStock = currentProduct ? getProductStock(currentProduct) : 0;
   const itemStock = getProductItemStock(itemForm);
@@ -300,9 +303,24 @@ const AddProduct = () => {
     })
   ), [productCategoryFilter, productSearch, productsWithStock]);
 
+  const totalProductPages = Math.max(Math.ceil(filteredProducts.length / PAGE_SIZE), 1);
+  const pagedProducts = useMemo(() => (
+    filteredProducts.slice((productPage - 1) * PAGE_SIZE, productPage * PAGE_SIZE)
+  ), [filteredProducts, productPage]);
+
   useEffect(() => {
     saveProducts(products);
   }, [products]);
+
+  useEffect(() => {
+    setProductPage(1);
+  }, [productSearch, productCategoryFilter]);
+
+  useEffect(() => {
+    if (productPage > totalProductPages) {
+      setProductPage(totalProductPages);
+    }
+  }, [productPage, totalProductPages]);
 
   useEffect(() => {
     if (isCatalogRoute) {
@@ -801,12 +819,17 @@ const AddProduct = () => {
 
       {step === 'catalog' && (
         <CatalogManager
-          products={filteredProducts}
+          products={pagedProducts}
+          filteredCount={filteredProducts.length}
+          productPage={productPage}
+          totalProductPages={totalProductPages}
           productSearch={productSearch}
           productCategoryFilter={productCategoryFilter}
           categories={categories}
           onSearchChange={setProductSearch}
           onCategoryFilterChange={setProductCategoryFilter}
+          onPrevPage={() => setProductPage((current) => Math.max(current - 1, 1))}
+          onNextPage={() => setProductPage((current) => Math.min(current + 1, totalProductPages))}
           expandedProductId={expandedProductId}
           onToggleProduct={setExpandedProductId}
           onEdit={editExistingProduct}
@@ -1128,13 +1151,13 @@ const ProductItemsPanel = ({ product, onEditItem, onDeleteItem, deletingItemId, 
   </aside>
 );
 
-const CatalogManager = ({ products, productSearch, productCategoryFilter, categories, onSearchChange, onCategoryFilterChange, expandedProductId, onToggleProduct, onEdit, onDelete, deletingProductId, loadingProducts, getProductName, getProductDescription, text }) => (
+const CatalogManager = ({ products, filteredCount, productPage, totalProductPages, productSearch, productCategoryFilter, categories, onSearchChange, onCategoryFilterChange, onPrevPage, onNextPage, expandedProductId, onToggleProduct, onEdit, onDelete, deletingProductId, loadingProducts, getProductName, getProductDescription, text }) => (
   <section className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900">
     <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
       <div>
         <h2 className="text-2xl font-bold text-gray-950 dark:text-white">{text.productManagement}</h2>
       </div>
-      <span className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-gray-700 dark:bg-gray-800 dark:text-gray-200">{products.length} {text.products}</span>
+      <span className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-gray-700 dark:bg-gray-800 dark:text-gray-200">{filteredCount} {text.products}</span>
     </div>
 
     <div className="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
@@ -1178,6 +1201,20 @@ const CatalogManager = ({ products, productSearch, productCategoryFilter, catego
         />
       ))}
     </div>
+
+    {filteredCount > 0 && (
+      <div className="mt-6 flex items-center justify-between">
+        <p className="text-sm text-gray-500 dark:text-gray-400">Page {productPage} of {totalProductPages}</p>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={onPrevPage} disabled={productPage === 1} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200">
+            Previous
+          </button>
+          <button type="button" onClick={onNextPage} disabled={productPage === totalProductPages} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200">
+            Next
+          </button>
+        </div>
+      </div>
+    )}
   </section>
 );
 

@@ -43,10 +43,13 @@ function App() {
                       <Route path="/" element={<Navigate to="/dashboard" replace />} />
                       <Route path="/dashboard" element={<Dashboard />} />
                       <Route path="/orders" element={<OrderManagement />} />
+                      <Route path="/orders/view" element={<OrderManagement />} />
                       <Route path="/products" element={<AddProduct />} />
+                      <Route path="/products/view" element={<AddProduct />} />
                       <Route path="/add-product" element={<AddProduct />} />
                       <Route path="/products/add" element={<AddProduct />} />
                       <Route path="/categories/new" element={<CategoryManager />} />
+                      <Route path="/categories/view" element={<CategoryManager />} />
                       <Route path="/add-category" element={<CategoryManager />} />
                       <Route path="/categories" element={<CategoryManager />} />
                       <Route path="/notifications" element={<Notifications />} />
