@@ -47,7 +47,6 @@ const createEmptyColorForm = () => ({
   colorCode: '#111827',
   images: [],
   imageFiles: [],
-  variants: [createEmptyVariantDraft()],
 });
 
 const money = (value) => new Intl.NumberFormat('en-US', {
@@ -85,6 +84,7 @@ const AddProduct = () => {
   const [colorForm, setColorForm] = useState(createEmptyColorForm);
   const [creatingProduct, setCreatingProduct] = useState(false);
   const [creatingColor, setCreatingColor] = useState(false);
+  const [creatingVariants, setCreatingVariants] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState('');
   const [productSearch, setProductSearch] = useState('');
   const [productCategoryFilter, setProductCategoryFilter] = useState('all');
@@ -95,6 +95,9 @@ const AddProduct = () => {
   const [selectedColorId, setSelectedColorId] = useState('');
   const [selectedVariantId, setSelectedVariantId] = useState('');
   const [currentBuilderProductId, setCurrentBuilderProductId] = useState('');
+  const [currentBuilderColorId, setCurrentBuilderColorId] = useState('');
+  const [builderPhase, setBuilderPhase] = useState('product');
+  const [variantDrafts, setVariantDrafts] = useState([createEmptyVariantDraft()]);
 
   const filteredProducts = useMemo(() => (
     products.filter((product) => {
@@ -235,8 +238,27 @@ const AddProduct = () => {
   useEffect(() => {
     if (!isCatalogRoute && builderProductIdFromRoute) {
       setCurrentBuilderProductId(builderProductIdFromRoute);
+      setBuilderPhase('color');
     }
   }, [builderProductIdFromRoute, isCatalogRoute]);
+
+  useEffect(() => {
+    if (isCatalogRoute) {
+      return;
+    }
+
+    if (!currentBuilderProductId) {
+      setBuilderPhase('product');
+      return;
+    }
+
+    if (!currentBuilderColorId) {
+      setBuilderPhase('color');
+      return;
+    }
+
+    setBuilderPhase('variants');
+  }, [currentBuilderColorId, currentBuilderProductId, isCatalogRoute]);
 
   const updateProductField = (field, value) => {
     setProductForm((currentForm) => ({ ...currentForm, [field]: value }));
@@ -247,26 +269,19 @@ const AddProduct = () => {
   };
 
   const updateVariantDraft = (variantId, field, value) => {
-    setColorForm((currentForm) => ({
-      ...currentForm,
-      variants: currentForm.variants.map((variant) => (
+    setVariantDrafts((currentDrafts) => (
+      currentDrafts.map((variant) => (
         variant.id === variantId ? { ...variant, [field]: value } : variant
-      )),
-    }));
+      ))
+    ));
   };
 
   const addVariantDraft = () => {
-    setColorForm((currentForm) => ({
-      ...currentForm,
-      variants: [...currentForm.variants, createEmptyVariantDraft()],
-    }));
+    setVariantDrafts((currentDrafts) => [...currentDrafts, createEmptyVariantDraft()]);
   };
 
   const removeVariantDraft = (variantId) => {
-    setColorForm((currentForm) => ({
-      ...currentForm,
-      variants: currentForm.variants.filter((variant) => variant.id !== variantId),
-    }));
+    setVariantDrafts((currentDrafts) => currentDrafts.filter((variant) => variant.id !== variantId));
   };
 
   const handleThumbnailChange = async (event) => {
@@ -315,7 +330,10 @@ const AddProduct = () => {
   const resetBuilder = () => {
     setProductForm(EMPTY_PRODUCT_FORM);
     setColorForm(createEmptyColorForm());
+    setVariantDrafts([createEmptyVariantDraft()]);
     setCurrentBuilderProductId('');
+    setCurrentBuilderColorId('');
+    setBuilderPhase('product');
   };
 
   const validateProduct = () => {
@@ -354,6 +372,9 @@ const AddProduct = () => {
       const productId = String(data?.productId || data?.id || '');
 
       setCurrentBuilderProductId(productId);
+      setCurrentBuilderColorId('');
+      setVariantDrafts([createEmptyVariantDraft()]);
+      setBuilderPhase('color');
       toast.success(text.toasts.productSavedToApi || 'Product created. Add colors and variants next.');
       await loadProducts();
 
@@ -372,20 +393,10 @@ const AddProduct = () => {
     if (!colorForm.colorCode.trim()) return text.errors.colorName || 'Color is required';
     if (colorForm.imageFiles.length === 0) return text.errors.itemImages || 'Add at least one image for this color';
 
-    const validVariants = colorForm.variants.filter((variant) => variant.size.trim() && variant.sku.trim());
-
-    if (validVariants.length === 0) {
-      return text.errors.itemQuantity || 'Add at least one variant with size and SKU';
-    }
-
-    if (validVariants.some((variant) => Number(variant.stock) < 0)) {
-      return 'Variant stock cannot be negative';
-    }
-
     return '';
   };
 
-  const saveColorAndVariants = async () => {
+  const saveColor = async () => {
     const validationError = validateColorForm();
 
     if (validationError) {
@@ -402,10 +413,51 @@ const AddProduct = () => {
       });
 
       const colorId = String(data?.productColorId || data?.colorId || data?.id || '');
-      const validVariants = colorForm.variants.filter((variant) => variant.size.trim() && variant.sku.trim());
+      setCurrentBuilderColorId(colorId);
+      setVariantDrafts([createEmptyVariantDraft()]);
+      setBuilderPhase('variants');
+      toast.success('Color saved. Add its variants next.');
+      setColorForm(createEmptyColorForm());
+      await loadProductDetails(currentBuilderProductId);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to create color'));
+    } finally {
+      setCreatingColor(false);
+    }
+  };
+
+  const validateVariants = () => {
+    if (!currentBuilderProductId) return text.errors.createProductFirst || 'Create the product first';
+    if (!currentBuilderColorId) return 'Save a color first';
+
+    const validVariants = variantDrafts.filter((variant) => variant.size.trim() && variant.sku.trim());
+
+    if (validVariants.length === 0) {
+      return text.errors.itemQuantity || 'Add at least one variant with size and SKU';
+    }
+
+    if (validVariants.some((variant) => Number(variant.stock) < 0)) {
+      return 'Variant stock cannot be negative';
+    }
+
+    return '';
+  };
+
+  const saveVariants = async () => {
+    const validationError = validateVariants();
+
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    setCreatingVariants(true);
+
+    try {
+      const validVariants = variantDrafts.filter((variant) => variant.size.trim() && variant.sku.trim());
 
       await Promise.all(validVariants.map((variant) => (
-        productsAPI.createVariant(currentBuilderProductId, colorId, {
+        productsAPI.createVariant(currentBuilderProductId, currentBuilderColorId, {
           size: variant.size.trim(),
           sku: variant.sku.trim(),
           stock: Number(variant.stock || 0),
@@ -413,14 +465,16 @@ const AddProduct = () => {
         })
       )));
 
-      toast.success('Color and variants saved');
-      setColorForm(createEmptyColorForm());
+      toast.success('Variants saved. You can add another color now.');
+      setVariantDrafts([createEmptyVariantDraft()]);
+      setCurrentBuilderColorId('');
+      setBuilderPhase('color');
       await loadProducts();
       await loadProductDetails(currentBuilderProductId);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to create color and variants'));
+      toast.error(getApiErrorMessage(err, 'Failed to create variants'));
     } finally {
-      setCreatingColor(false);
+      setCreatingVariants(false);
     }
   };
 
@@ -452,6 +506,35 @@ const AddProduct = () => {
   const openBuilderForProduct = (productId) => {
     navigate('/products/add', { state: { productId } });
   };
+
+  const builderSteps = [
+    {
+      id: 'product',
+      number: '01',
+      title: 'Create product',
+      description: 'Basic info, category, base price, and thumbnail.',
+      ready: Boolean(currentBuilderProductId),
+      active: builderPhase === 'product',
+    },
+    {
+      id: 'color',
+      number: '02',
+      title: 'Add color',
+      description: 'Save one product color and upload its images.',
+      ready: Boolean(activeProductDetails?.colors?.length),
+      active: builderPhase === 'color',
+      locked: !currentBuilderProductId,
+    },
+    {
+      id: 'variants',
+      number: '03',
+      title: 'Add variants',
+      description: 'Attach sizes, stock, SKU, and optional override price to the saved color.',
+      ready: Boolean(selectedColor?.variants?.length),
+      active: builderPhase === 'variants',
+      locked: !currentBuilderColorId,
+    },
+  ];
 
   return (
     <div className="space-y-8">
@@ -563,6 +646,56 @@ const AddProduct = () => {
       ) : (
         <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_430px]">
           <section className="space-y-8">
+            <div className="rounded-[32px] border border-slate-200 bg-[linear-gradient(135deg,#ffffff_0%,#f8fafc_45%,#eef6ff_100%)] p-6 shadow-sm dark:border-slate-800 dark:bg-[linear-gradient(135deg,#0f172a_0%,#111827_45%,#0b2239_100%)]">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--brand-primary)]">Product Setup Flow</p>
+                  <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">Phase by phase, in backend order.</h2>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+                    First we create the product. Then we save one color. Then we add that color&apos;s sellable variants. After that, we loop back and add another color if needed.
+                  </p>
+                </div>
+                {currentBuilderProductId && (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200">
+                    Product ID: <span className="font-bold">{currentBuilderProductId}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-6 grid gap-4 lg:grid-cols-3">
+                {builderSteps.map((step) => (
+                  <button
+                    key={step.id}
+                    type="button"
+                    onClick={() => {
+                      if (!step.locked) {
+                        setBuilderPhase(step.id);
+                      }
+                    }}
+                    disabled={step.locked}
+                    className={`rounded-[26px] border p-5 text-left transition ${
+                      step.active
+                        ? 'border-blue-300 bg-blue-50 shadow-sm dark:border-blue-900 dark:bg-blue-950/40'
+                        : 'border-slate-200 bg-white/80 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/70'
+                    } ${step.locked ? 'cursor-not-allowed opacity-55' : ''}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">{step.number}</p>
+                        <h3 className="mt-2 text-lg font-bold text-slate-950 dark:text-white">{step.title}</h3>
+                      </div>
+                      {step.ready && (
+                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200">
+                          Done
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{step.description}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div className="mb-6 flex items-center justify-between">
                 <div>
@@ -615,16 +748,20 @@ const AddProduct = () => {
 
               <div className="mt-8 flex justify-end">
                 <button type="button" disabled={creatingProduct} onClick={saveProduct} className="rounded-2xl bg-blue-600 px-7 py-3 font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50">
-                  {creatingProduct ? (text.creatingProduct || 'Creating product...') : (text.saveAndAddItems || 'Save product and add colors')}
+                  {creatingProduct ? (text.creatingProduct || 'Creating product...') : 'Save product and continue to color'}
                 </button>
               </div>
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className={`rounded-3xl border p-6 shadow-sm transition dark:border-slate-800 dark:bg-slate-900 ${
+              builderPhase === 'color'
+                ? 'border-slate-200 bg-white'
+                : 'border-slate-200 bg-slate-50/60 opacity-70 dark:bg-slate-900/80'
+            }`}>
               <div className="mb-6 flex items-center justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-950 dark:text-white">2. Color And Variants</h2>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Every color owns its images, and every variant under it owns size, stock, SKU, and optional price override.</p>
+                  <h2 className="text-2xl font-bold text-slate-950 dark:text-white">2. Add Color</h2>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Save one color first. Its images belong to the color, not the variant.</p>
                 </div>
                 {currentBuilderProductId && (
                   <button type="button" onClick={() => loadProductDetails(currentBuilderProductId)} className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
@@ -633,7 +770,7 @@ const AddProduct = () => {
                 )}
               </div>
 
-              <div className="grid gap-5">
+              <div className={`grid gap-5 ${!currentBuilderProductId ? 'pointer-events-none opacity-50' : ''}`}>
                 <label className="block">
                   <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Color code</span>
                   <div className="mt-2 flex gap-3">
@@ -668,57 +805,94 @@ const AddProduct = () => {
                   </div>
                 </div>
 
-                <div>
-                  <div className="mb-4 flex items-center justify-between">
-                    <div>
-                      <h3 className="font-bold text-slate-950 dark:text-white">Variants</h3>
-                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">No fixed size list here. Add whatever sizes the backend returns or needs.</p>
-                    </div>
-                    <button type="button" onClick={addVariantDraft} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200">
-                      <PlusIcon className="h-4 w-4" />
-                      Add variant
-                    </button>
-                  </div>
-
-                  <div className="space-y-4">
-                    {colorForm.variants.map((variant, index) => (
-                      <div key={variant.id} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
-                        <div className="mb-4 flex items-center justify-between">
-                          <p className="font-bold text-slate-950 dark:text-white">Variant {index + 1}</p>
-                          {colorForm.variants.length > 1 && (
-                            <button type="button" onClick={() => removeVariantDraft(variant.id)} className="rounded-xl border border-red-200 px-3 py-1.5 text-sm font-bold text-red-600 transition hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950">
-                              Remove
-                            </button>
-                          )}
-                        </div>
-                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                          <label className="block">
-                            <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.size || 'Size'}</span>
-                            <input value={variant.size} onChange={(event) => updateVariantDraft(variant.id, 'size', event.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder="S, M, 42, One Size..." />
-                          </label>
-                          <label className="block">
-                            <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.sku}</span>
-                            <input value={variant.sku} onChange={(event) => updateVariantDraft(variant.id, 'sku', event.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
-                          </label>
-                          <label className="block">
-                            <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Stock</span>
-                            <input type="number" min="0" value={variant.stock} onChange={(event) => updateVariantDraft(variant.id, 'stock', event.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
-                          </label>
-                          <label className="block">
-                            <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Price override</span>
-                            <input type="number" min="0" value={variant.priceOverride} onChange={(event) => updateVariantDraft(variant.id, 'priceOverride', event.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder="Optional" />
-                          </label>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               </div>
 
               <div className="mt-8 flex justify-end">
-                <button type="button" disabled={creatingColor || !currentBuilderProductId} onClick={saveColorAndVariants} className="inline-flex items-center gap-2 rounded-2xl bg-green-600 px-7 py-3 font-bold text-white transition hover:bg-green-700 disabled:opacity-50">
+                <button type="button" disabled={creatingColor || !currentBuilderProductId} onClick={saveColor} className="inline-flex items-center gap-2 rounded-2xl bg-green-600 px-7 py-3 font-bold text-white transition hover:bg-green-700 disabled:opacity-50">
                   <CheckCircleIcon className="h-5 w-5" />
-                  {creatingColor ? 'Saving color...' : 'Save color and variants'}
+                  {creatingColor ? 'Saving color...' : 'Save color and continue to variants'}
+                </button>
+              </div>
+            </div>
+
+            <div className={`rounded-3xl border p-6 shadow-sm transition dark:border-slate-800 dark:bg-slate-900 ${
+              builderPhase === 'variants'
+                ? 'border-slate-200 bg-white'
+                : 'border-slate-200 bg-slate-50/60 opacity-70 dark:bg-slate-900/80'
+            }`}>
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-950 dark:text-white">3. Add Variants</h2>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Now attach sellable SKUs to the saved color. Each row becomes one variant.</p>
+                </div>
+                {currentBuilderColorId && (
+                  <span className="rounded-full bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-200">
+                    Color ID: {currentBuilderColorId}
+                  </span>
+                )}
+              </div>
+
+              <div className={`${!currentBuilderColorId ? 'pointer-events-none opacity-50' : ''}`}>
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-slate-950 dark:text-white">Variants</h3>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">No fixed size list here. Add whatever sizes the backend needs for this color.</p>
+                  </div>
+                  <button type="button" onClick={addVariantDraft} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200">
+                    <PlusIcon className="h-4 w-4" />
+                    Add variant
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {variantDrafts.map((variant, index) => (
+                    <div key={variant.id} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
+                      <div className="mb-4 flex items-center justify-between">
+                        <p className="font-bold text-slate-950 dark:text-white">Variant {index + 1}</p>
+                        {variantDrafts.length > 1 && (
+                          <button type="button" onClick={() => removeVariantDraft(variant.id)} className="rounded-xl border border-red-200 px-3 py-1.5 text-sm font-bold text-red-600 transition hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950">
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <label className="block">
+                          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.size || 'Size'}</span>
+                          <input value={variant.size} onChange={(event) => updateVariantDraft(variant.id, 'size', event.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder="S, M, 42, One Size..." />
+                        </label>
+                        <label className="block">
+                          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.sku}</span>
+                          <input value={variant.sku} onChange={(event) => updateVariantDraft(variant.id, 'sku', event.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                        </label>
+                        <label className="block">
+                          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Stock</span>
+                          <input type="number" min="0" value={variant.stock} onChange={(event) => updateVariantDraft(variant.id, 'stock', event.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
+                        </label>
+                        <label className="block">
+                          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Price override</span>
+                          <input type="number" min="0" value={variant.priceOverride} onChange={(event) => updateVariantDraft(variant.id, 'priceOverride', event.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder="Optional" />
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-8 flex flex-wrap justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentBuilderColorId('');
+                    setBuilderPhase('color');
+                  }}
+                  disabled={!currentBuilderColorId || creatingVariants}
+                  className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  Back to color
+                </button>
+                <button type="button" disabled={creatingVariants || !currentBuilderColorId} onClick={saveVariants} className="inline-flex items-center gap-2 rounded-2xl bg-green-600 px-7 py-3 font-bold text-white transition hover:bg-green-700 disabled:opacity-50">
+                  <CheckCircleIcon className="h-5 w-5" />
+                  {creatingVariants ? 'Saving variants...' : 'Save variants and add another color'}
                 </button>
               </div>
             </div>
