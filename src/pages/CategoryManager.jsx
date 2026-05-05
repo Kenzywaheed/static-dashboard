@@ -132,7 +132,7 @@ const getApiErrorMessage = (err, fallbackMessage) => {
   return responseData?.message || responseData?.error || fallbackMessage;
 };
 
-const getDemoCategoryPage = (page) => (page === 0 ? DEMO_CATEGORIES : []);
+const getDemoCategoryPage = () => [];
 
 const buildCreateCategoryRequest = (form) => ({
   categoryNameEn: form.nameEn.trim(),
@@ -251,12 +251,12 @@ const CategoryManager = () => {
       const demoCategories = getDemoCategoryPage(page);
       setCategories(demoCategories);
       setCurrentPage(page);
-      setTotalPages(1);
-      setTotalCategories(DEMO_CATEGORIES.length);
+      setTotalPages(0);
+      setTotalCategories(0);
       setSelectedCategoryId(demoCategories[0]?.id || '');
       setExpandedCategoryId(demoCategories[0]?.id || null);
       setDetailsOpen(false);
-      setListError('');
+      setListError(text.brandRequired);
       return;
     }
 
@@ -271,8 +271,8 @@ const CategoryManager = () => {
 
       setCategories(nextCategories);
       setCurrentPage(page);
-      setTotalPages(mappedCategories.length ? normalized.totalPages : 1);
-      setTotalCategories(mappedCategories.length ? normalized.totalElements : DEMO_CATEGORIES.length);
+      setTotalPages(mappedCategories.length ? normalized.totalPages : 0);
+      setTotalCategories(mappedCategories.length ? normalized.totalElements : 0);
 
       if (nextCategories.length === 0) {
         setSelectedCategoryId('');
@@ -297,12 +297,12 @@ const CategoryManager = () => {
       const demoCategories = getDemoCategoryPage(page);
       setCategories(demoCategories);
       setCurrentPage(page);
-      setTotalPages(1);
-      setTotalCategories(DEMO_CATEGORIES.length);
+      setTotalPages(0);
+      setTotalCategories(0);
       setSelectedCategoryId(demoCategories[0]?.id || '');
       setExpandedCategoryId(demoCategories[0]?.id || null);
       setDetailsOpen(false);
-      setListError('');
+      setListError(getApiErrorMessage(err, text.loadFailed));
     } finally {
       setLoading(false);
     }

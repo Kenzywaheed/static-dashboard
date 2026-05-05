@@ -16,7 +16,15 @@ import {
   BarChart,
   Bar,
 } from 'recharts';
+import { categoriesAPI, productsAPI } from '../services/endpoints';
+import { useAuth } from '../hooks/useAuth';
 import { getDashboardData } from '../services/dashboardMockData';
+import {
+  mapProductToSummary,
+  normalizeCategoryCollectionResponse,
+  normalizeCollectionResponse,
+  normalizeProduct,
+} from '../services/productApiUtils';
 
 const money = (value) => new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -47,9 +55,60 @@ const summaryCards = [
 const cardClass = 'rounded-[26px] border border-[#e8e2d7] bg-[linear-gradient(180deg,#ffffff_0%,#fbf8f4_100%)] p-5 shadow-[0_24px_45px_-34px_rgba(15,23,42,0.35)] transition hover:-translate-y-0.5 hover:shadow-[0_28px_55px_-34px_rgba(15,23,42,0.38)] dark:border-slate-800 dark:bg-[linear-gradient(180deg,#0f172a_0%,#111827_100%)]';
 
 const Dashboard = () => {
+  const { user } = useAuth();
+  const brandId = user?.id || '';
   const { data, isLoading } = useQuery({
-    queryKey: ['dashboard-simple'],
-    queryFn: async () => getDashboardData(),
+    queryKey: ['dashboard-simple', brandId],
+    queryFn: async () => {
+      const baseData = getDashboardData();
+
+      try {
+        const [productsResponse, categoriesResponse] = await Promise.all([
+          productsAPI.getAll({ page: 0, size: 100 }),
+          brandId ? categoriesAPI.getAll({ brandId, page: 0, size: 100 }) : Promise.resolve({ data: [] }),
+        ]);
+
+        const products = normalizeCollectionResponse(productsResponse.data)
+          .map(normalizeProduct)
+          .map(mapProductToSummary);
+        const categories = brandId ? normalizeCategoryCollectionResponse(categoriesResponse.data) : [];
+        const totalStock = products.reduce((sum, product) => sum + Number(product.totalStock || 0), 0);
+        const averagePrice = products.length
+          ? products.reduce((sum, product) => sum + Number(product.minPrice || 0), 0) / products.length
+          : 0;
+        const lowStockProducts = products.filter((product) => Number(product.totalStock || 0) < 20);
+
+        return {
+          ...baseData,
+          products,
+          categories,
+          lowStockProducts,
+          summary: {
+            ...baseData.summary,
+            totalProducts: products.length,
+            totalCategories: categories.length,
+            totalStock,
+            averagePrice,
+            lowStockCount: lowStockProducts.length,
+          },
+        };
+      } catch {
+        return {
+          ...baseData,
+          products: [],
+          categories: [],
+          lowStockProducts: [],
+          summary: {
+            ...baseData.summary,
+            totalProducts: 0,
+            totalCategories: 0,
+            totalStock: 0,
+            averagePrice: 0,
+            lowStockCount: 0,
+          },
+        };
+      }
+    },
   });
 
   if (isLoading) {
@@ -156,19 +215,21 @@ const Dashboard = () => {
                   <tr key={product.id} className="border-b border-slate-100 dark:border-slate-800/70">
                     <td className="py-4">
                       <div className="flex items-center gap-3">
-                        <img src={product.thumbnail} alt={product.productNameEn} className="h-11 w-11 rounded-xl object-cover" />
+                        {product.mainImage ? (
+                          <img src={product.mainImage} alt={product.productName} className="h-11 w-11 rounded-xl object-cover" />
+                        ) : (
+                          <div className="h-11 w-11 rounded-xl bg-slate-200 dark:bg-slate-800" />
+                        )}
                         <div>
-                          <p className="font-medium text-slate-950 dark:text-white">{product.productNameEn}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">{product.productNameAr}</p>
+                          <p className="font-medium text-slate-950 dark:text-white">{product.productName}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">{product.brandName}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="py-4 text-slate-600 dark:text-slate-300">{product.categoryNameEn}</td>
-                    <td className="py-4 text-slate-600 dark:text-slate-300">{money(product.price)}</td>
-                    <td className="py-4 text-slate-600 dark:text-slate-300">
-                      {product.productItems.reduce((sum, item) => sum + Object.values(item.sizes || {}).reduce((inner, qty) => inner + Number(qty || 0), 0), 0)}
-                    </td>
-                    <td className="py-4 text-slate-600 dark:text-slate-300">{formatDate(product.createdAt)}</td>
+                    <td className="py-4 text-slate-600 dark:text-slate-300">{product.categoryName}</td>
+                    <td className="py-4 text-slate-600 dark:text-slate-300">{money(product.minPrice)}</td>
+                    <td className="py-4 text-slate-600 dark:text-slate-300">{product.totalStock}</td>
+                    <td className="py-4 text-slate-600 dark:text-slate-300">Live API</td>
                   </tr>
                 ))}
               </tbody>
@@ -256,8 +317,8 @@ const Dashboard = () => {
           <div className="mt-5 space-y-3">
             {data.lowStockProducts.slice(0, 2).map((product) => (
               <div key={product.id} className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/60">
-                <p className="font-medium text-slate-950 dark:text-white">{product.productNameEn}</p>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{product.categoryNameEn}</p>
+                <p className="font-medium text-slate-950 dark:text-white">{product.productName}</p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{product.categoryName}</p>
               </div>
             ))}
             {data.notifications.slice(0, 2).map((notification) => (

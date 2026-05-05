@@ -8,7 +8,7 @@ const BRAND_OWNER_CATEGORIES_BASE_URL = `${API_BASE_URL}/api/v1/brands/categorie
 const BRAND_CATEGORIES_BASE_URL = `${API_BASE_URL}/api/v1/categories/brands`;
 const OTP_BASE_URL = `${API_BASE_URL}/api/v1/public/otp`;
 const PRODUCTS_BASE_URL = `${API_BASE_URL}/api/v1/brands/product`;
-const CUSTOMER_BRAND_PRODUCTS_BASE_URL = `${API_BASE_URL}/api/v1/customer/brand`;
+const PUBLIC_PRODUCTS_BASE_URL = `${API_BASE_URL}/api/v1/products`;
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -156,33 +156,13 @@ const toNestedFormData = (data, { keepEmptyStrings = false } = {}) => {
   return formData;
 };
 
-const toProductItemFormData = (data) => {
+const toProductColorFormData = (data) => {
   const formData = new FormData();
 
-  appendFormDataValue(formData, 'color', data.color, { keepEmptyStrings: true });
-  appendFormDataValue(formData, 'sku', data.sku, { keepEmptyStrings: true });
   appendFormDataValue(formData, 'colorCode', data.colorCode, { keepEmptyStrings: true });
 
-  (data.sizeAndStockList || []).forEach((size) => {
-    appendFormDataValue(formData, 'sizeAndStockList.sizeName', size.sizeName, { keepEmptyStrings: true });
-    appendFormDataValue(formData, 'sizeAndStockList.stock', size.stock, { keepEmptyStrings: true });
-  });
-
-  (data.productItemImages || []).forEach((file) => {
-    appendFormDataValue(formData, 'productItemImages', file, { keepEmptyStrings: true });
-  });
-
-  return formData;
-};
-
-const toProductItemPatchFormData = (data) => {
-  const formData = new FormData();
-
-  appendFormDataValue(formData, 'sku', data.sku, { keepEmptyStrings: true });
-
-  (data.size || []).forEach((size) => {
-    appendFormDataValue(formData, 'size.sizeName', size.sizeName, { keepEmptyStrings: true });
-    appendFormDataValue(formData, 'size.stock', size.stock, { keepEmptyStrings: true });
+  (data.images || data.productColorImages || []).forEach((file) => {
+    appendFormDataValue(formData, 'images', file, { keepEmptyStrings: true });
   });
 
   return formData;
@@ -294,7 +274,6 @@ export const authAPI = {
 
 export const productsAPI = {
   getAll: ({
-    brandId,
     minPrice,
     maxPrice,
     minRating,
@@ -302,7 +281,7 @@ export const productsAPI = {
     categoryName,
     page = 0,
     size = 100,
-  } = {}) => apiClient.get(`${CUSTOMER_BRAND_PRODUCTS_BASE_URL}/${brandId}/products`, {
+  } = {}) => apiClient.get(PUBLIC_PRODUCTS_BASE_URL, {
     params: {
       minPrice,
       maxPrice,
@@ -313,7 +292,7 @@ export const productsAPI = {
       size,
     },
   }),
-  getDetails: (brandId, productId) => apiClient.get(`${CUSTOMER_BRAND_PRODUCTS_BASE_URL}/${brandId}/products/${productId}`),
+  getDetails: (productId) => apiClient.get(`${PUBLIC_PRODUCTS_BASE_URL}/${productId}`),
   create: (data) => apiClient.post(
     PRODUCTS_BASE_URL,
     toFormData(data, { keepEmptyStrings: true }),
@@ -329,15 +308,19 @@ export const productsAPI = {
   toggleArchive: (productId, archived) => apiClient.patch(`${PRODUCTS_BASE_URL}/${productId}/archive`, null, {
     params: { archived },
   }),
-  createItem: (productId, data) => apiClient.post(
-    `${PRODUCTS_BASE_URL}/${productId}/items`,
-    toProductItemFormData(data),
+  createColor: (productId, data) => apiClient.post(
+    `${PRODUCTS_BASE_URL}/${productId}/colors`,
+    toProductColorFormData(data),
   ),
-  updateItem: (productId, productItemId, data) => apiClient.patch(
-    `${PRODUCTS_BASE_URL}/${productId}/items/${productItemId}`,
-    toProductItemPatchFormData(data),
+  createVariant: (productId, colorId, data) => apiClient.post(
+    `${PRODUCTS_BASE_URL}/${productId}/colors/${colorId}/variants`,
+    toFormData(data, { keepEmptyStrings: true }),
   ),
-  removeItem: (productId, productItemId) => apiClient.delete(`${PRODUCTS_BASE_URL}/${productId}/items/${productItemId}`),
+  updateVariantStock: (productId, colorId, variantId, stock) => apiClient.patch(
+    `${PRODUCTS_BASE_URL}/${productId}/colors/${colorId}/variants/${variantId}/stock`,
+    null,
+    { params: { stock } },
+  ),
 };
 
 export { apiClient, toFormData, toNestedFormData };
