@@ -1,28 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import {
-  CheckCircleIcon,
-  CubeIcon,
-  PencilSquareIcon,
-  PhotoIcon,
-  PlusIcon,
-  StarIcon,
-  TrashIcon,
-} from '@heroicons/react/24/outline';
+import { PhotoIcon, QueueListIcon } from '@heroicons/react/24/outline';
 import { categoriesAPI, productsAPI } from '../services/endpoints';
 import { useLanguage } from '../hooks/useLanguage';
-import { useAuth } from '../hooks/useAuth';
 import {
   getApiErrorMessage,
-  mapProductToSummary,
   normalizeCategory,
   normalizeCategoryCollectionResponse,
-  normalizeCollectionResponse,
-  normalizeProduct,
 } from '../services/productApiUtils';
-
-const PAGE_SIZE = 6;
 
 const EMPTY_PRODUCT_FORM = {
   productNameEn: '',
@@ -35,28 +21,6 @@ const EMPTY_PRODUCT_FORM = {
   thumbnailFile: null,
 };
 
-const createEmptyVariantDraft = () => ({
-  id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-  size: '',
-  sku: '',
-  stock: 0,
-  priceOverride: '',
-});
-
-const createEmptyColorForm = () => ({
-  colorCode: '#111827',
-  images: [],
-  imageFiles: [],
-});
-
-const money = (value) => new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 2,
-}).format(Number(value || 0));
-
-const makeFileKey = (file) => `${file.name}-${file.size}-${file.lastModified}`;
-
 const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
   reader.onload = () => resolve(reader.result);
@@ -65,275 +29,72 @@ const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
 });
 
 const AddProduct = () => {
-  const { t } = useLanguage();
-  const { user } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
+  const { t, language } = useLanguage();
   const text = t.product;
-  const brandId = user?.id || '';
+  const navigate = useNavigate();
   const thumbnailInputRef = useRef(null);
-  const colorImagesInputRef = useRef(null);
-  const isCatalogRoute = location.pathname === '/products' || location.pathname === '/products/view';
-  const builderProductIdFromRoute = location.state?.productId || '';
 
   const [categories, setCategories] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [loadingProducts, setLoadingProducts] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(false);
-  const [productForm, setProductForm] = useState(EMPTY_PRODUCT_FORM);
-  const [colorForm, setColorForm] = useState(createEmptyColorForm);
   const [creatingProduct, setCreatingProduct] = useState(false);
-  const [creatingColor, setCreatingColor] = useState(false);
-  const [creatingVariants, setCreatingVariants] = useState(false);
-  const [deletingProductId, setDeletingProductId] = useState('');
-  const [productSearch, setProductSearch] = useState('');
-  const [productCategoryFilter, setProductCategoryFilter] = useState('all');
-  const [productPage, setProductPage] = useState(1);
-  const [activeProductId, setActiveProductId] = useState('');
-  const [activeProductDetails, setActiveProductDetails] = useState(null);
-  const [detailsLoading, setDetailsLoading] = useState(false);
-  const [selectedColorId, setSelectedColorId] = useState('');
-  const [selectedVariantId, setSelectedVariantId] = useState('');
-  const [currentBuilderProductId, setCurrentBuilderProductId] = useState('');
-  const [currentBuilderColorId, setCurrentBuilderColorId] = useState('');
-  const [builderPhase, setBuilderPhase] = useState('product');
-  const [variantDrafts, setVariantDrafts] = useState([createEmptyVariantDraft()]);
+  const [productForm, setProductForm] = useState(EMPTY_PRODUCT_FORM);
 
-  const filteredProducts = useMemo(() => (
-    products.filter((product) => {
-      const matchesSearch = !productSearch.trim() || [
-        product.productName,
-        product.brandName,
-        product.categoryName,
-      ].some((value) => String(value || '').toLowerCase().includes(productSearch.trim().toLowerCase()));
-
-      const matchesCategory = productCategoryFilter === 'all' || product.categoryId === productCategoryFilter;
-
-      return matchesSearch && matchesCategory;
-    })
-  ), [productCategoryFilter, productSearch, products]);
-
-  const totalProductPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
-  const pagedProducts = useMemo(() => (
-    filteredProducts.slice((productPage - 1) * PAGE_SIZE, productPage * PAGE_SIZE)
-  ), [filteredProducts, productPage]);
-
-  const selectedColor = useMemo(() => (
-    activeProductDetails?.colors?.find((color) => color.id === selectedColorId) || activeProductDetails?.colors?.[0] || null
-  ), [activeProductDetails, selectedColorId]);
-
-  const selectedVariant = useMemo(() => (
-    selectedColor?.variants?.find((variant) => variant.id === selectedVariantId)
-    || selectedColor?.variants?.find((variant) => variant.stock > 0)
-    || selectedColor?.variants?.[0]
-    || null
-  ), [selectedColor, selectedVariantId]);
-
-  const loadProducts = async () => {
-    setLoadingProducts(true);
-
-    try {
-      const { data } = await productsAPI.getAll({ page: 0, size: 100 });
-      const nextProducts = normalizeCollectionResponse(data)
-        .map(normalizeProduct)
-        .map(mapProductToSummary);
-      setProducts(nextProducts);
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to load products'));
-      setProducts([]);
-    } finally {
-      setLoadingProducts(false);
+  const ui = language === 'ar'
+    ? {
+      title: 'إضافة منتج جديد',
+      subtitle: 'اكتب بيانات المنتج الأساسية هنا. بعد الحفظ ستنتقل مباشرة إلى صفحة الألوان الخاصة به.',
+      backToProducts: 'الرجوع إلى كل المنتجات',
+      save: 'حفظ المنتج والانتقال للألوان',
+      saving: 'جارٍ حفظ المنتج...',
+      flowTitle: 'خطوة 1 من 3',
+      flowBody: 'ابدأ بالاسم والوصف والتصنيف والسعر والصورة الرئيسية. بعد ذلك ستضيف الألوان، ثم المقاسات داخل كل لون.',
     }
-  };
-
-  const loadCategories = async () => {
-    if (!brandId) {
-      setCategories([]);
-      return;
-    }
-
-    setLoadingCategories(true);
-
-    try {
-      const { data } = await categoriesAPI.getAll({ brandId, page: 0, size: 100 });
-      setCategories(normalizeCategoryCollectionResponse(data).map(normalizeCategory));
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to load categories'));
-      setCategories([]);
-    } finally {
-      setLoadingCategories(false);
-    }
-  };
-
-  const loadProductDetails = async (productId) => {
-    if (!productId) return;
-
-    setDetailsLoading(true);
-    setActiveProductId(productId);
-
-    try {
-      const { data } = await productsAPI.getDetails(productId);
-      const product = normalizeProduct(data?.data || data?.product || data);
-      setActiveProductDetails(product);
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to load product details'));
-      setActiveProductDetails(null);
-    } finally {
-      setDetailsLoading(false);
-    }
-  };
+    : {
+      title: 'Create Product',
+      subtitle: 'Enter the main product details here. After save, you move directly to this product color page.',
+      backToProducts: 'Back to all products',
+      save: 'Save product and continue to colors',
+      saving: 'Saving product...',
+      flowTitle: 'Step 1 of 3',
+      flowBody: 'Start with the name, descriptions, category, price, and main image. The next step is colors, then sizes inside each color.',
+    };
 
   useEffect(() => {
-    loadProducts();
+    const loadCategories = async () => {
+      setLoadingCategories(true);
+
+      try {
+        const { data } = await categoriesAPI.getAll({ page: 0, size: 100 });
+        setCategories(normalizeCategoryCollectionResponse(data).map(normalizeCategory));
+      } catch (err) {
+        toast.error(getApiErrorMessage(err, 'Failed to load categories'));
+        setCategories([]);
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+
+    loadCategories();
   }, []);
 
-  useEffect(() => {
-    loadCategories();
-  }, [brandId]);
-
-  useEffect(() => {
-    setProductPage(1);
-  }, [productCategoryFilter, productSearch]);
-
-  useEffect(() => {
-    if (productPage > totalProductPages) {
-      setProductPage(totalProductPages);
-    }
-  }, [productPage, totalProductPages]);
-
-  useEffect(() => {
-    if (!activeProductDetails?.colors?.length) {
-      setSelectedColorId('');
-      setSelectedVariantId('');
-      return;
-    }
-
-    const firstColor = activeProductDetails.colors[0];
-    const firstVariant = firstColor.variants.find((variant) => variant.stock > 0) || firstColor.variants[0];
-
-    setSelectedColorId(firstColor.id);
-    setSelectedVariantId(firstVariant?.id || '');
-  }, [activeProductDetails]);
-
-  useEffect(() => {
-    if (!selectedColor) {
-      setSelectedVariantId('');
-      return;
-    }
-
-    if (selectedColor.variants.some((variant) => variant.id === selectedVariantId)) {
-      return;
-    }
-
-    const nextVariant = selectedColor.variants.find((variant) => variant.stock > 0) || selectedColor.variants[0];
-    setSelectedVariantId(nextVariant?.id || '');
-  }, [selectedColor, selectedVariantId]);
-
-  useEffect(() => {
-    if (!isCatalogRoute && currentBuilderProductId) {
-      loadProductDetails(currentBuilderProductId);
-    }
-  }, [currentBuilderProductId, isCatalogRoute]);
-
-  useEffect(() => {
-    if (!isCatalogRoute && builderProductIdFromRoute) {
-      setCurrentBuilderProductId(builderProductIdFromRoute);
-      setBuilderPhase('color');
-    }
-  }, [builderProductIdFromRoute, isCatalogRoute]);
-
-  useEffect(() => {
-    if (isCatalogRoute) {
-      return;
-    }
-
-    if (!currentBuilderProductId) {
-      setBuilderPhase('product');
-      return;
-    }
-
-    if (!currentBuilderColorId) {
-      setBuilderPhase('color');
-      return;
-    }
-
-    setBuilderPhase('variants');
-  }, [currentBuilderColorId, currentBuilderProductId, isCatalogRoute]);
-
   const updateProductField = (field, value) => {
-    setProductForm((currentForm) => ({ ...currentForm, [field]: value }));
-  };
-
-  const updateColorField = (field, value) => {
-    setColorForm((currentForm) => ({ ...currentForm, [field]: value }));
-  };
-
-  const updateVariantDraft = (variantId, field, value) => {
-    setVariantDrafts((currentDrafts) => (
-      currentDrafts.map((variant) => (
-        variant.id === variantId ? { ...variant, [field]: value } : variant
-      ))
-    ));
-  };
-
-  const addVariantDraft = () => {
-    setVariantDrafts((currentDrafts) => [...currentDrafts, createEmptyVariantDraft()]);
-  };
-
-  const removeVariantDraft = (variantId) => {
-    setVariantDrafts((currentDrafts) => currentDrafts.filter((variant) => variant.id !== variantId));
+    setProductForm((current) => ({ ...current, [field]: value }));
   };
 
   const handleThumbnailChange = async (event) => {
     const file = event.target.files?.[0];
-    if (!file) return;
 
-    const thumbnail = await readFileAsDataUrl(file);
-    setProductForm((currentForm) => ({ ...currentForm, thumbnail, thumbnailFile: file }));
-  };
+    if (!file) {
+      return;
+    }
 
-  const handleColorImagesChange = async (event) => {
-    const files = Array.from(event.target.files || []).filter((file) => file.type.startsWith('image/'));
-    if (files.length === 0) return;
+    const preview = await readFileAsDataUrl(file);
 
-    const sources = await Promise.all(files.map(readFileAsDataUrl));
-    const entries = files.map((file, index) => ({
-      id: makeFileKey(file),
-      src: sources[index],
-      file,
-      fileKey: makeFileKey(file),
+    setProductForm((current) => ({
+      ...current,
+      thumbnail: preview,
+      thumbnailFile: file,
     }));
-
-    setColorForm((currentForm) => ({
-      ...currentForm,
-      imageFiles: [...currentForm.imageFiles, ...entries.map((entry) => entry.file)],
-      images: [...currentForm.images, ...entries.map(({ id, src, fileKey }) => ({ id, src, fileKey }))],
-    }));
-
-    event.target.value = '';
-  };
-
-  const removeColorImage = (imageId) => {
-    setColorForm((currentForm) => {
-      const removedImage = currentForm.images.find((image) => image.id === imageId);
-
-      return {
-        ...currentForm,
-        images: currentForm.images.filter((image) => image.id !== imageId),
-        imageFiles: removedImage?.fileKey
-          ? currentForm.imageFiles.filter((file) => makeFileKey(file) !== removedImage.fileKey)
-          : currentForm.imageFiles,
-      };
-    });
-  };
-
-  const resetBuilder = () => {
-    setProductForm(EMPTY_PRODUCT_FORM);
-    setColorForm(createEmptyColorForm());
-    setVariantDrafts([createEmptyVariantDraft()]);
-    setCurrentBuilderProductId('');
-    setCurrentBuilderColorId('');
-    setBuilderPhase('product');
   };
 
   const validateProduct = () => {
@@ -358,7 +119,7 @@ const AddProduct = () => {
     setCreatingProduct(true);
 
     try {
-      const request = {
+      const { data } = await productsAPI.create({
         productNameEn: productForm.productNameEn.trim(),
         productDescriptionEn: productForm.productDescriptionEn.trim(),
         productNameAr: productForm.productNameAr.trim(),
@@ -366,21 +127,25 @@ const AddProduct = () => {
         productPrice: Number(productForm.price),
         categoryId: productForm.categoryId,
         thumbnail: productForm.thumbnailFile,
-      };
+      });
 
-      const { data } = await productsAPI.create(request);
       const productId = String(data?.productId || data?.id || '');
+      const selectedCategory = categories.find((category) => category.id === productForm.categoryId);
 
-      setCurrentBuilderProductId(productId);
-      setCurrentBuilderColorId('');
-      setVariantDrafts([createEmptyVariantDraft()]);
-      setBuilderPhase('color');
-      toast.success(text.toasts.productSavedToApi || 'Product created. Add colors and variants next.');
-      await loadProducts();
-
-      if (productId) {
-        await loadProductDetails(productId);
-      }
+      toast.success(text.toasts.productSavedToApi || 'Product created');
+      navigate(`/products/${productId}/colors`, {
+        state: {
+          productName: data?.productNameEn || productForm.productNameEn.trim(),
+          productNameEn: data?.productNameEn || productForm.productNameEn.trim(),
+          productNameAr: data?.productNameAr || productForm.productNameAr.trim(),
+          categoryName: selectedCategory?.nameAr || selectedCategory?.name || '',
+          categoryNameEn: selectedCategory?.name || '',
+          categoryNameAr: selectedCategory?.nameAr || '',
+          basePrice: Number(productForm.price),
+          categoryId: productForm.categoryId,
+          thumbnail: productForm.thumbnail,
+        },
+      });
     } catch (err) {
       toast.error(getApiErrorMessage(err, text.toasts.productSaveFailed || 'Failed to create product'));
     } finally {
@@ -388,639 +153,104 @@ const AddProduct = () => {
     }
   };
 
-  const validateColorForm = () => {
-    if (!currentBuilderProductId) return text.errors.createProductFirst || 'Create the product first';
-    if (!colorForm.colorCode.trim()) return text.errors.colorName || 'Color is required';
-    if (colorForm.imageFiles.length === 0) return text.errors.itemImages || 'Add at least one image for this color';
-
-    return '';
-  };
-
-  const saveColor = async () => {
-    const validationError = validateColorForm();
-
-    if (validationError) {
-      toast.error(validationError);
-      return;
-    }
-
-    setCreatingColor(true);
-
-    try {
-      const { data } = await productsAPI.createColor(currentBuilderProductId, {
-        colorCode: colorForm.colorCode,
-        images: colorForm.imageFiles,
-      });
-
-      const colorId = String(data?.productColorId || data?.colorId || data?.id || '');
-      setCurrentBuilderColorId(colorId);
-      setVariantDrafts([createEmptyVariantDraft()]);
-      setBuilderPhase('variants');
-      toast.success('Color saved. Add its variants next.');
-      setColorForm(createEmptyColorForm());
-      await loadProductDetails(currentBuilderProductId);
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to create color'));
-    } finally {
-      setCreatingColor(false);
-    }
-  };
-
-  const validateVariants = () => {
-    if (!currentBuilderProductId) return text.errors.createProductFirst || 'Create the product first';
-    if (!currentBuilderColorId) return 'Save a color first';
-
-    const validVariants = variantDrafts.filter((variant) => variant.size.trim() && variant.sku.trim());
-
-    if (validVariants.length === 0) {
-      return text.errors.itemQuantity || 'Add at least one variant with size and SKU';
-    }
-
-    if (validVariants.some((variant) => Number(variant.stock) < 0)) {
-      return 'Variant stock cannot be negative';
-    }
-
-    return '';
-  };
-
-  const saveVariants = async () => {
-    const validationError = validateVariants();
-
-    if (validationError) {
-      toast.error(validationError);
-      return;
-    }
-
-    setCreatingVariants(true);
-
-    try {
-      const validVariants = variantDrafts.filter((variant) => variant.size.trim() && variant.sku.trim());
-
-      await Promise.all(validVariants.map((variant) => (
-        productsAPI.createVariant(currentBuilderProductId, currentBuilderColorId, {
-          size: variant.size.trim(),
-          sku: variant.sku.trim(),
-          stock: Number(variant.stock || 0),
-          priceOverride: variant.priceOverride === '' ? null : Number(variant.priceOverride),
-        })
-      )));
-
-      toast.success('Variants saved. You can add another color now.');
-      setVariantDrafts([createEmptyVariantDraft()]);
-      setCurrentBuilderColorId('');
-      setBuilderPhase('color');
-      await loadProducts();
-      await loadProductDetails(currentBuilderProductId);
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to create variants'));
-    } finally {
-      setCreatingVariants(false);
-    }
-  };
-
-  const deleteProduct = async (productId) => {
-    if (!window.confirm(text.deleteProductConfirm || 'Delete this product?')) return;
-
-    setDeletingProductId(productId);
-
-    try {
-      await productsAPI.remove(productId);
-      toast.success(text.toasts.productRemoved || 'Product deleted');
-      setProducts((currentProducts) => currentProducts.filter((product) => product.id !== productId));
-
-      if (activeProductId === productId) {
-        setActiveProductId('');
-        setActiveProductDetails(null);
-      }
-
-      if (currentBuilderProductId === productId) {
-        resetBuilder();
-      }
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to delete product'));
-    } finally {
-      setDeletingProductId('');
-    }
-  };
-
-  const openBuilderForProduct = (productId) => {
-    navigate('/products/add', { state: { productId } });
-  };
-
-  const builderSteps = [
-    {
-      id: 'product',
-      number: '01',
-      title: 'Create product',
-      description: 'Basic info, category, base price, and thumbnail.',
-      ready: Boolean(currentBuilderProductId),
-      active: builderPhase === 'product',
-    },
-    {
-      id: 'color',
-      number: '02',
-      title: 'Add color',
-      description: 'Save one product color and upload its images.',
-      ready: Boolean(activeProductDetails?.colors?.length),
-      active: builderPhase === 'color',
-      locked: !currentBuilderProductId,
-    },
-    {
-      id: 'variants',
-      number: '03',
-      title: 'Add variants',
-      description: 'Attach sizes, stock, SKU, and optional override price to the saved color.',
-      ready: Boolean(selectedColor?.variants?.length),
-      active: builderPhase === 'variants',
-      locked: !currentBuilderColorId,
-    },
-  ];
-
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-950 dark:text-white">{isCatalogRoute ? 'Products' : text.title}</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500 dark:text-gray-400">
-            {isCatalogRoute
-              ? 'Products now load from the real backend. Color images and size options come from product details, not local mock data.'
-              : 'Create the base product first, then add one color at a time with its own images and sellable variants.'}
-          </p>
-        </div>
-        <button type="button" onClick={resetBuilder} className="w-fit rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-bold text-gray-800 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800">
-          {text.newProduct}
-        </button>
-      </div>
-
-      {isCatalogRoute ? (
-        <section className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
-              <input
-                value={productSearch}
-                onChange={(event) => setProductSearch(event.target.value)}
-                placeholder={text.searchProducts || 'Search products'}
-                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-              />
-              <select
-                value={productCategoryFilter}
-                onChange={(event) => setProductCategoryFilter(event.target.value)}
-                disabled={loadingCategories}
-                className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-              >
-                <option value="all">{text.allCategories || 'All categories'}</option>
-                {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-              </select>
+    <div className="space-y-6">
+      <section className="rounded-[30px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#faf7f2_100%)] p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-950 dark:text-white">{ui.title}</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">{ui.subtitle}</p>
+            <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
+              <span className="rounded-full bg-[var(--brand-primary)] px-3 py-1.5 text-white">1. Product</span>
+              <span className="rounded-full bg-white px-3 py-1.5 text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700">2. Colors</span>
+              <span className="rounded-full bg-white px-3 py-1.5 text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700">3. Variants</span>
             </div>
-
-            <div className="mt-6 space-y-4">
-              {loadingProducts ? (
-                <div className="rounded-2xl border border-dashed border-slate-300 p-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">Loading products...</div>
-              ) : pagedProducts.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-300 p-12 text-center dark:border-slate-700">
-                  <CubeIcon className="mx-auto h-12 w-12 text-slate-400" />
-                  <p className="mt-4 font-bold text-slate-900 dark:text-white">{text.noProducts || 'No products yet'}</p>
-                </div>
-              ) : pagedProducts.map((product) => (
-                <article key={product.id} className={`rounded-3xl border p-4 transition ${activeProductId === product.id ? 'border-blue-300 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20' : 'border-slate-200 bg-slate-50/70 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950/30'}`}>
-                  <div className="grid gap-4 md:grid-cols-[110px_minmax(0,1fr)_auto] md:items-center">
-                    <button type="button" onClick={() => loadProductDetails(product.id)} className="h-28 w-28 overflow-hidden rounded-2xl bg-slate-200 text-left dark:bg-slate-800">
-                      {product.mainImage ? (
-                        <img src={product.mainImage} alt={product.productName} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-slate-400"><PhotoIcon className="h-10 w-10" /></div>
-                      )}
-                    </button>
-
-                    <div className="min-w-0">
-                      <button type="button" onClick={() => loadProductDetails(product.id)} className="text-left">
-                        <h2 className="truncate text-lg font-bold text-slate-950 dark:text-white">{product.productName}</h2>
-                      </button>
-                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{product.brandName || 'Unbranded'}</p>
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
-                        <span className="rounded-full bg-white px-3 py-1.5 text-slate-700 dark:bg-slate-900 dark:text-slate-200">{product.categoryName || 'Uncategorized'}</span>
-                        <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200">{money(product.minPrice)}</span>
-                        <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-700 dark:bg-slate-800 dark:text-slate-200">{product.totalStock} {text.pieces || 'pcs'}</span>
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1.5 text-amber-700 dark:bg-amber-950 dark:text-amber-200">
-                          <StarIcon className="h-4 w-4" />
-                          {product.avgRating.toFixed(1)} ({product.ratingCount})
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <button type="button" onClick={() => openBuilderForProduct(product.id)} className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-600 text-white transition hover:bg-blue-700">
-                        <PencilSquareIcon className="h-5 w-5" />
-                      </button>
-                      <button type="button" disabled={deletingProductId === product.id} onClick={() => deleteProduct(product.id)} className="grid h-11 w-11 place-items-center rounded-2xl border border-red-200 text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:hover:bg-red-950">
-                        <TrashIcon className="h-5 w-5" />
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-
-            {filteredProducts.length > 0 && (
-              <div className="mt-6 flex items-center justify-between">
-                <p className="text-sm text-slate-500 dark:text-slate-400">Page {productPage} of {totalProductPages}</p>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => setProductPage((currentPage) => Math.max(1, currentPage - 1))} disabled={productPage === 1} className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200">Previous</button>
-                  <button type="button" onClick={() => setProductPage((currentPage) => Math.min(totalProductPages, currentPage + 1))} disabled={productPage === totalProductPages} className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200">Next</button>
-                </div>
-              </div>
-            )}
           </div>
 
-          <ProductDetailsPanel
-            product={activeProductDetails}
-            loading={detailsLoading}
-            selectedColorId={selectedColorId}
-            selectedVariantId={selectedVariantId}
-            selectedColor={selectedColor}
-            selectedVariant={selectedVariant}
-            onSelectColor={setSelectedColorId}
-            onSelectVariant={setSelectedVariantId}
-          />
-        </section>
-      ) : (
-        <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_430px]">
-          <section className="space-y-8">
-            <div className="rounded-[32px] border border-slate-200 bg-[linear-gradient(135deg,#ffffff_0%,#f8fafc_45%,#eef6ff_100%)] p-6 shadow-sm dark:border-slate-800 dark:bg-[linear-gradient(135deg,#0f172a_0%,#111827_45%,#0b2239_100%)]">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--brand-primary)]">Product Setup Flow</p>
-                  <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">Phase by phase, in backend order.</h2>
-                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">
-                    First we create the product. Then we save one color. Then we add that color&apos;s sellable variants. After that, we loop back and add another color if needed.
-                  </p>
-                </div>
-                {currentBuilderProductId && (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200">
-                    Product ID: <span className="font-bold">{currentBuilderProductId}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-6 grid gap-4 lg:grid-cols-3">
-                {builderSteps.map((step) => (
-                  <button
-                    key={step.id}
-                    type="button"
-                    onClick={() => {
-                      if (!step.locked) {
-                        setBuilderPhase(step.id);
-                      }
-                    }}
-                    disabled={step.locked}
-                    className={`rounded-[26px] border p-5 text-left transition ${
-                      step.active
-                        ? 'border-blue-300 bg-blue-50 shadow-sm dark:border-blue-900 dark:bg-blue-950/40'
-                        : 'border-slate-200 bg-white/80 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/70'
-                    } ${step.locked ? 'cursor-not-allowed opacity-55' : ''}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">{step.number}</p>
-                        <h3 className="mt-2 text-lg font-bold text-slate-950 dark:text-white">{step.title}</h3>
-                      </div>
-                      {step.ready && (
-                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200">
-                          Done
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{step.description}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <div className="mb-6 flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-950 dark:text-white">1. Product</h2>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Create the base product record first.</p>
-                </div>
-                {currentBuilderProductId && <span className="rounded-full bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200">Saved</span>}
-              </div>
-
-              <div className="grid gap-5 md:grid-cols-2">
-                <label className="block">
-                  <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.productNameEn || 'Product name EN'}</span>
-                  <input value={productForm.productNameEn} onChange={(event) => updateProductField('productNameEn', event.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.productNameAr || 'Product name AR'}</span>
-                  <input value={productForm.productNameAr} onChange={(event) => updateProductField('productNameAr', event.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
-                </label>
-                <label className="block md:col-span-2">
-                  <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.descriptionEn || 'Description EN'}</span>
-                  <textarea value={productForm.productDescriptionEn} onChange={(event) => updateProductField('productDescriptionEn', event.target.value)} rows={4} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
-                </label>
-                <label className="block md:col-span-2">
-                  <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.descriptionAr || 'Description AR'}</span>
-                  <textarea value={productForm.productDescriptionAr} onChange={(event) => updateProductField('productDescriptionAr', event.target.value)} rows={4} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.category}</span>
-                  <select value={productForm.categoryId} onChange={(event) => updateProductField('categoryId', event.target.value)} disabled={loadingCategories} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-950 dark:text-white">
-                    <option value="">{text.chooseCategory || 'Choose category'}</option>
-                    {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.basePrice || 'Base price'}</span>
-                  <input type="number" min="0" value={productForm.price} onChange={(event) => updateProductField('price', event.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
-                </label>
-              </div>
-
-              <div className="mt-6 rounded-2xl border border-dashed border-slate-300 p-5 dark:border-slate-700">
-                <div className="flex flex-wrap items-center gap-4">
-                  <button type="button" onClick={() => thumbnailInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
-                    <PhotoIcon className="h-5 w-5" />
-                    {text.uploadThumbnail || 'Upload product thumbnail'}
-                  </button>
-                  <input ref={thumbnailInputRef} type="file" accept="image/*" onChange={handleThumbnailChange} className="hidden" />
-                  {productForm.thumbnail && <img src={productForm.thumbnail} alt="" className="h-16 w-16 rounded-2xl object-cover" />}
-                </div>
-              </div>
-
-              <div className="mt-8 flex justify-end">
-                <button type="button" disabled={creatingProduct} onClick={saveProduct} className="rounded-2xl bg-blue-600 px-7 py-3 font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50">
-                  {creatingProduct ? (text.creatingProduct || 'Creating product...') : 'Save product and continue to color'}
-                </button>
-              </div>
-            </div>
-
-            <div className={`rounded-3xl border p-6 shadow-sm transition dark:border-slate-800 dark:bg-slate-900 ${
-              builderPhase === 'color'
-                ? 'border-slate-200 bg-white'
-                : 'border-slate-200 bg-slate-50/60 opacity-70 dark:bg-slate-900/80'
-            }`}>
-              <div className="mb-6 flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-950 dark:text-white">2. Add Color</h2>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Save one color first. Its images belong to the color, not the variant.</p>
-                </div>
-                {currentBuilderProductId && (
-                  <button type="button" onClick={() => loadProductDetails(currentBuilderProductId)} className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
-                    Refresh details
-                  </button>
-                )}
-              </div>
-
-              <div className={`grid gap-5 ${!currentBuilderProductId ? 'pointer-events-none opacity-50' : ''}`}>
-                <label className="block">
-                  <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Color code</span>
-                  <div className="mt-2 flex gap-3">
-                    <input type="color" value={colorForm.colorCode} onChange={(event) => updateColorField('colorCode', event.target.value)} className="h-12 w-16 cursor-pointer rounded-lg border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-950" />
-                    <input value={colorForm.colorCode} onChange={(event) => updateColorField('colorCode', event.target.value)} className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
-                  </div>
-                </label>
-
-                <div>
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 className="font-bold text-slate-950 dark:text-white">Color images</h3>
-                    <button type="button" onClick={() => colorImagesInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
-                      <PlusIcon className="h-4 w-4" />
-                      {text.addImages || 'Add images'}
-                    </button>
-                  </div>
-                  <input ref={colorImagesInputRef} type="file" accept="image/*" multiple onChange={handleColorImagesChange} className="hidden" />
-                  <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-                    {colorForm.images.map((image) => (
-                      <div key={image.id} className="group relative aspect-square overflow-hidden rounded-2xl bg-slate-100 dark:bg-slate-950">
-                        <img src={image.src} alt="" className="h-full w-full object-cover" />
-                        <button type="button" onClick={() => removeColorImage(image.id)} className="absolute right-2 top-2 rounded-xl bg-red-600 p-2 text-white opacity-0 transition group-hover:opacity-100">
-                          <TrashIcon className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-                    {colorForm.images.length === 0 && (
-                      <button type="button" onClick={() => colorImagesInputRef.current?.click()} className="aspect-square rounded-2xl border border-dashed border-slate-300 text-slate-400 transition hover:border-blue-500 hover:text-blue-500 dark:border-slate-700">
-                        <PhotoIcon className="mx-auto h-9 w-9" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-              </div>
-
-              <div className="mt-8 flex justify-end">
-                <button type="button" disabled={creatingColor || !currentBuilderProductId} onClick={saveColor} className="inline-flex items-center gap-2 rounded-2xl bg-green-600 px-7 py-3 font-bold text-white transition hover:bg-green-700 disabled:opacity-50">
-                  <CheckCircleIcon className="h-5 w-5" />
-                  {creatingColor ? 'Saving color...' : 'Save color and continue to variants'}
-                </button>
-              </div>
-            </div>
-
-            <div className={`rounded-3xl border p-6 shadow-sm transition dark:border-slate-800 dark:bg-slate-900 ${
-              builderPhase === 'variants'
-                ? 'border-slate-200 bg-white'
-                : 'border-slate-200 bg-slate-50/60 opacity-70 dark:bg-slate-900/80'
-            }`}>
-              <div className="mb-6 flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-950 dark:text-white">3. Add Variants</h2>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Now attach sellable SKUs to the saved color. Each row becomes one variant.</p>
-                </div>
-                {currentBuilderColorId && (
-                  <span className="rounded-full bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-200">
-                    Color ID: {currentBuilderColorId}
-                  </span>
-                )}
-              </div>
-
-              <div className={`${!currentBuilderColorId ? 'pointer-events-none opacity-50' : ''}`}>
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <h3 className="font-bold text-slate-950 dark:text-white">Variants</h3>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">No fixed size list here. Add whatever sizes the backend needs for this color.</p>
-                  </div>
-                  <button type="button" onClick={addVariantDraft} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200">
-                    <PlusIcon className="h-4 w-4" />
-                    Add variant
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  {variantDrafts.map((variant, index) => (
-                    <div key={variant.id} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
-                      <div className="mb-4 flex items-center justify-between">
-                        <p className="font-bold text-slate-950 dark:text-white">Variant {index + 1}</p>
-                        {variantDrafts.length > 1 && (
-                          <button type="button" onClick={() => removeVariantDraft(variant.id)} className="rounded-xl border border-red-200 px-3 py-1.5 text-sm font-bold text-red-600 transition hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950">
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                        <label className="block">
-                          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.size || 'Size'}</span>
-                          <input value={variant.size} onChange={(event) => updateVariantDraft(variant.id, 'size', event.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder="S, M, 42, One Size..." />
-                        </label>
-                        <label className="block">
-                          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">{text.sku}</span>
-                          <input value={variant.sku} onChange={(event) => updateVariantDraft(variant.id, 'sku', event.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
-                        </label>
-                        <label className="block">
-                          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Stock</span>
-                          <input type="number" min="0" value={variant.stock} onChange={(event) => updateVariantDraft(variant.id, 'stock', event.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" />
-                        </label>
-                        <label className="block">
-                          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Price override</span>
-                          <input type="number" min="0" value={variant.priceOverride} onChange={(event) => updateVariantDraft(variant.id, 'priceOverride', event.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-gray-700 dark:bg-gray-950 dark:text-white" placeholder="Optional" />
-                        </label>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-8 flex flex-wrap justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentBuilderColorId('');
-                    setBuilderPhase('color');
-                  }}
-                  disabled={!currentBuilderColorId || creatingVariants}
-                  className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                >
-                  Back to color
-                </button>
-                <button type="button" disabled={creatingVariants || !currentBuilderColorId} onClick={saveVariants} className="inline-flex items-center gap-2 rounded-2xl bg-green-600 px-7 py-3 font-bold text-white transition hover:bg-green-700 disabled:opacity-50">
-                  <CheckCircleIcon className="h-5 w-5" />
-                  {creatingVariants ? 'Saving variants...' : 'Save variants and add another color'}
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <ProductDetailsPanel
-            product={activeProductDetails}
-            loading={detailsLoading}
-            selectedColorId={selectedColorId}
-            selectedVariantId={selectedVariantId}
-            selectedColor={selectedColor}
-            selectedVariant={selectedVariant}
-            onSelectColor={setSelectedColorId}
-            onSelectVariant={setSelectedVariantId}
-            emptyMessage={currentBuilderProductId ? 'Product saved. Load details to preview its live colors and variants.' : 'Create a product to preview its live detail response.'}
-          />
+          <button
+            type="button"
+            onClick={() => navigate('/products/view')}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+          >
+            <QueueListIcon className="h-5 w-5" />
+            {ui.backToProducts}
+          </button>
         </div>
-      )}
+      </section>
+
+      <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="mb-6 grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-950">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{ui.flowTitle}</p>
+            <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
+              {ui.flowBody}
+            </p>
+          </div>
+          <div className="grid gap-5 md:grid-cols-2">
+          <Field label={text.productNameEn || 'Product name EN'}>
+            <input value={productForm.productNameEn} onChange={(event) => updateProductField('productNameEn', event.target.value)} className={inputClassName} />
+          </Field>
+          <Field label={text.productNameAr || 'Product name AR'}>
+            <input value={productForm.productNameAr} onChange={(event) => updateProductField('productNameAr', event.target.value)} className={inputClassName} />
+          </Field>
+          <Field label={text.descriptionEn || 'Description EN'} wide>
+            <textarea value={productForm.productDescriptionEn} onChange={(event) => updateProductField('productDescriptionEn', event.target.value)} rows={4} className={textareaClassName} />
+          </Field>
+          <Field label={text.descriptionAr || 'Description AR'} wide>
+            <textarea value={productForm.productDescriptionAr} onChange={(event) => updateProductField('productDescriptionAr', event.target.value)} rows={4} className={textareaClassName} />
+          </Field>
+          <Field label={text.category}>
+            <select value={productForm.categoryId} onChange={(event) => updateProductField('categoryId', event.target.value)} disabled={loadingCategories} className={inputClassName}>
+              <option value="">{text.chooseCategory || 'Choose category'}</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>{category.name}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label={text.basePrice || 'Base price'}>
+            <input type="number" min="0" value={productForm.price} onChange={(event) => updateProductField('price', event.target.value)} className={inputClassName} />
+          </Field>
+        </div>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-dashed border-slate-300 p-5 dark:border-slate-700">
+          <div className="flex flex-wrap items-center gap-4">
+            <button
+              type="button"
+              onClick={() => thumbnailInputRef.current?.click()}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <PhotoIcon className="h-5 w-5" />
+              {text.uploadThumbnail || 'Upload product thumbnail'}
+            </button>
+            <input ref={thumbnailInputRef} type="file" accept="image/*" onChange={handleThumbnailChange} className="hidden" />
+            {productForm.thumbnail && <img src={productForm.thumbnail} alt="" className="h-16 w-16 rounded-2xl object-cover" />}
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            disabled={creatingProduct}
+            onClick={saveProduct}
+            className="rounded-xl bg-[var(--brand-primary)] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[var(--brand-primary-dark)] disabled:opacity-50"
+          >
+            {creatingProduct ? ui.saving : ui.save}
+          </button>
+        </div>
+      </section>
     </div>
   );
 };
 
-const ProductDetailsPanel = ({
-  product,
-  loading,
-  selectedColorId,
-  selectedVariantId,
-  selectedColor,
-  selectedVariant,
-  onSelectColor,
-  onSelectVariant,
-  emptyMessage = 'Choose a product to inspect its live backend details.',
-}) => {
-  if (loading) {
-    return <aside className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">Loading product details...</aside>;
-  }
-
-  if (!product) {
-    return (
-      <aside className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-        {emptyMessage}
-      </aside>
-    );
-  }
-
-  return (
-    <aside className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div>
-        <p className="text-sm font-medium text-[var(--brand-primary)]">Live product details</p>
-        <h2 className="mt-2 text-2xl font-bold text-slate-950 dark:text-white">{product.productName}</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{product.description || 'No description available.'}</p>
-      </div>
-
-      <div className="mt-5 flex flex-wrap gap-2 text-xs font-bold">
-        <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-700 dark:bg-slate-800 dark:text-slate-200">{product.brandName || 'Unbranded'}</span>
-        <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-700 dark:bg-slate-800 dark:text-slate-200">{product.categoryName || 'Uncategorized'}</span>
-        <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-700 dark:bg-amber-950 dark:text-amber-200">{product.avgRating.toFixed(1)} rating ({product.ratingCount})</span>
-      </div>
-
-      <div className="mt-8">
-        <h3 className="font-bold text-slate-950 dark:text-white">Colors</h3>
-        <div className="mt-3 flex flex-wrap gap-3">
-          {product.colors.map((color) => (
-            <button
-              key={color.id}
-              type="button"
-              onClick={() => onSelectColor(color.id)}
-              className={`h-11 w-11 rounded-full border-2 transition ${selectedColorId === color.id ? 'border-slate-950 shadow-lg dark:border-white' : 'border-slate-300 dark:border-slate-700'}`}
-              style={{ backgroundColor: color.colorCode }}
-              title={color.colorCode}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <h3 className="font-bold text-slate-950 dark:text-white">Images for selected color</h3>
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          {selectedColor?.images?.length ? selectedColor.images.map((image) => (
-            <div key={image.id} className="aspect-square overflow-hidden rounded-2xl bg-slate-100 dark:bg-slate-950">
-              <img src={image.imageUrl} alt="" className="h-full w-full object-cover" />
-            </div>
-          )) : (
-            <div className="col-span-2 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-              No images found for this color.
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <h3 className="font-bold text-slate-950 dark:text-white">Sizes</h3>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {selectedColor?.variants?.map((variant) => (
-            <button
-              key={variant.id}
-              type="button"
-              disabled={variant.stock === 0}
-              onClick={() => onSelectVariant(variant.id)}
-              className={`rounded-2xl border px-4 py-2 text-sm font-bold transition ${
-                selectedVariantId === variant.id
-                  ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-950 dark:text-blue-100'
-                  : 'border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800'
-              } disabled:cursor-not-allowed disabled:opacity-45`}
-            >
-              {variant.size}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-8 rounded-2xl bg-slate-50 p-5 dark:bg-slate-950">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <InfoTile label="Variant ID" value={selectedVariant?.id || '-'} />
-          <InfoTile label="SKU" value={selectedVariant?.sku || '-'} />
-          <InfoTile label="Stock" value={String(selectedVariant?.stock ?? 0)} />
-          <InfoTile label="Effective price" value={money(selectedVariant?.effectivePrice || product.basePrice)} />
-        </div>
-      </div>
-    </aside>
-  );
-};
-
-const InfoTile = ({ label, value }) => (
-  <div className="rounded-2xl bg-white p-4 dark:bg-slate-900">
-    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{label}</p>
-    <p className="mt-2 break-all text-sm font-medium text-slate-900 dark:text-white">{value}</p>
-  </div>
+const Field = ({ label, children, wide = false }) => (
+  <label className={`block ${wide ? 'md:col-span-2' : ''}`}>
+    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</span>
+    <div className="mt-2">{children}</div>
+  </label>
 );
+
+const inputClassName = 'w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary-soft)] dark:border-slate-700 dark:bg-slate-950 dark:text-white';
+const textareaClassName = 'w-full resize-none rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary-soft)] dark:border-slate-700 dark:bg-slate-950 dark:text-white';
 
 export default AddProduct;

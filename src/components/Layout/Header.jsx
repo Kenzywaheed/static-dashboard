@@ -13,21 +13,6 @@ import {
   SunIcon,
 } from '@heroicons/react/24/outline';
 
-const pageTitles = {
-  '/dashboard': 'Home',
-  '/orders': 'Orders',
-  '/orders/view': 'Orders',
-  '/products': 'Products',
-  '/products/view': 'Products',
-  '/products/add': 'Add Product',
-  '/categories': 'Categories',
-  '/categories/view': 'Categories',
-  '/categories/new': 'Add Category',
-  '/notifications': 'Notifications',
-  '/calendar': 'Calendar',
-  '/setup': 'Setup',
-};
-
 const Header = ({
   toggleMobileSidebar,
   toggleDesktopSidebar,
@@ -36,7 +21,7 @@ const Header = ({
   setIsDarkMode,
 }) => {
   const { user, logout } = useAuth();
-  const { language, setLanguage, isRtl } = useLanguage();
+  const { language, setLanguage, isRtl, t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
@@ -54,18 +39,40 @@ const Header = ({
   }, []);
 
   const title = useMemo(() => {
-    const matchedEntry = Object.entries(pageTitles).find(([path]) => location.pathname.startsWith(path));
-    return matchedEntry?.[1] || 'Home';
-  }, [location.pathname]);
+    const pageTitles = [
+      ['/products/add', t.product?.newProduct || t.nav.addProduct],
+      ['/products/view', t.product?.productManagement || t.nav.addProduct],
+      ['/products/', t.product?.productManagement || t.nav.addProduct],
+      ['/products', t.product?.productManagement || t.nav.addProduct],
+      ['/orders/view', t.nav.orders],
+      ['/orders', t.nav.orders],
+      ['/categories/new', t.category?.newCategory || t.nav.categories],
+      ['/categories/view', t.nav.categories],
+      ['/categories', t.nav.categories],
+      ['/collaboration', t.nav?.collaboration || (language === 'ar' ? 'التعاون' : 'Collaboration')],
+      ['/notifications', t.nav.notifications],
+      ['/calendar', t.nav.calendar],
+      ['/setup', t.setup?.badge || 'Setup'],
+      ['/dashboard', t.dashboard?.title || t.nav.dashboard],
+    ];
+
+    const matchedEntry = pageTitles.find(([path]) => (
+      path.endsWith('/')
+        ? location.pathname.startsWith(path)
+        : location.pathname === path || location.pathname.startsWith(`${path}/`)
+    ));
+
+    return matchedEntry?.[1] || (t.dashboard?.title || t.nav.dashboard);
+  }, [language, location.pathname, t]);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-[#e8e4de] bg-[rgba(250,248,244,0.88)] backdrop-blur-xl dark:border-slate-800 dark:bg-[rgba(2,6,23,0.82)]">
+    <header className="sticky top-0 z-30 border-b border-[#ddd6cc] bg-[rgba(247,244,238,0.96)] dark:border-slate-800 dark:bg-[rgba(11,17,32,0.94)]">
       <div className="relative flex items-center justify-between gap-4 px-4 py-4 sm:px-6">
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={toggleMobileSidebar}
-            className="rounded-xl border border-[#dfd7cc] bg-white/80 p-2 text-slate-700 transition hover:-translate-y-0.5 hover:border-[var(--brand-primary)]/40 hover:bg-white dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-300 xl:hidden"
+            className="rounded-lg border border-[#d8d0c5] bg-white p-2 text-slate-700 transition hover:border-[var(--brand-primary)]/40 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 xl:hidden"
             aria-label="Open menu"
           >
             <Bars3Icon className="h-5 w-5" />
@@ -74,7 +81,7 @@ const Header = ({
           <button
             type="button"
             onClick={toggleDesktopSidebar}
-            className="hidden rounded-xl border border-[#dfd7cc] bg-white/80 p-2 text-slate-700 transition hover:-translate-y-0.5 hover:border-[var(--brand-primary)]/40 hover:bg-white dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-300 xl:inline-flex"
+            className="hidden rounded-lg border border-[#d8d0c5] bg-white p-2 text-slate-700 transition hover:border-[var(--brand-primary)]/40 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 xl:inline-flex"
             aria-label={sidebarVisible ? 'Hide sidebar' : 'Show sidebar'}
           >
             {sidebarVisible ? <ChevronLeftIcon className="h-5 w-5" /> : <ChevronRightIcon className="h-5 w-5" />}
@@ -82,19 +89,7 @@ const Header = ({
 
           <div>
             <h1 className="text-xl font-semibold text-slate-950 dark:text-white">{title}</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Soft and focused workspace</p>
-          </div>
-        </div>
-
-        <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 xl:flex">
-          <div className="inline-flex items-center gap-3 rounded-full border border-[#e4ddd2] bg-white/90 px-4 py-2 shadow-[0_16px_36px_-28px_rgba(15,23,42,0.6)] dark:border-slate-800 dark:bg-slate-900/90">
-            <div className="grid h-9 w-9 place-items-center rounded-full bg-[linear-gradient(135deg,var(--brand-primary),#7dd3c7)] text-sm font-bold text-white shadow-sm">
-              SH
-            </div>
-            <div className="text-left">
-              <p className="text-sm font-semibold text-slate-950 dark:text-white">StyleHub</p>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">Home for your brand</p>
-            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Clear and practical workspace</p>
           </div>
         </div>
 
@@ -102,7 +97,7 @@ const Header = ({
           <button
             type="button"
             onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}
-            className="inline-flex items-center gap-2 rounded-xl border border-[#dfd7cc] bg-white/80 px-3 py-2 text-sm text-slate-700 transition hover:-translate-y-0.5 hover:border-[var(--brand-primary)]/40 hover:bg-white dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-200"
+            className="inline-flex items-center gap-2 rounded-lg border border-[#d8d0c5] bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-[var(--brand-primary)]/40 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
           >
             <LanguageIcon className="h-4 w-4" />
             <span>{language === 'en' ? 'AR' : 'EN'}</span>
@@ -111,7 +106,7 @@ const Header = ({
           <button
             type="button"
             onClick={() => setIsDarkMode(!isDarkMode)}
-            className="rounded-xl border border-[#dfd7cc] bg-white/80 p-2 text-slate-700 transition hover:-translate-y-0.5 hover:border-[var(--brand-primary)]/40 hover:bg-white dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-300"
+            className="rounded-lg border border-[#d8d0c5] bg-white p-2 text-slate-700 transition hover:border-[var(--brand-primary)]/40 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
           >
             {isDarkMode ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
           </button>
@@ -119,7 +114,7 @@ const Header = ({
           <button
             type="button"
             onClick={() => navigate('/notifications')}
-            className="rounded-xl border border-[#dfd7cc] bg-white/80 p-2 text-slate-700 transition hover:-translate-y-0.5 hover:border-[var(--brand-primary)]/40 hover:bg-white dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-300"
+            className="rounded-lg border border-[#d8d0c5] bg-white p-2 text-slate-700 transition hover:border-[var(--brand-primary)]/40 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
           >
             <BellIcon className="h-5 w-5" />
           </button>
@@ -128,9 +123,9 @@ const Header = ({
             <button
               type="button"
               onClick={() => setShowDropdown((current) => !current)}
-              className={`flex items-center gap-3 rounded-xl border border-[#dfd7cc] bg-white/80 px-3 py-2 transition hover:-translate-y-0.5 hover:border-[var(--brand-primary)]/40 hover:bg-white dark:border-slate-800 dark:bg-slate-900/80 ${isRtl ? 'flex-row-reverse' : ''}`}
+              className={`flex items-center gap-3 rounded-lg border border-[#d8d0c5] bg-white px-3 py-2 transition hover:border-[var(--brand-primary)]/40 dark:border-slate-800 dark:bg-slate-900 ${isRtl ? 'flex-row-reverse' : ''}`}
             >
-              <div className="grid h-8 w-8 place-items-center rounded-full bg-[linear-gradient(135deg,var(--brand-primary),#7dd3c7)] text-sm font-semibold text-white">
+              <div className="grid h-8 w-8 place-items-center rounded-full bg-[var(--brand-primary)] text-sm font-semibold text-white">
                 {(user?.name || 'B').charAt(0).toUpperCase()}
               </div>
               <div className="hidden text-left md:block">
@@ -140,7 +135,7 @@ const Header = ({
             </button>
 
             {showDropdown && (
-              <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-[#e4ddd2] bg-white p-2 shadow-[0_24px_48px_-30px_rgba(15,23,42,0.65)] dark:border-slate-800 dark:bg-slate-900">
+              <div className="absolute right-0 mt-2 w-56 rounded-xl border border-[#ded6cb] bg-white p-2 dark:border-slate-800 dark:bg-slate-900">
                 <button
                   type="button"
                   onClick={() => {

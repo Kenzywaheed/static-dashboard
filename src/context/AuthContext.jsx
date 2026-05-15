@@ -1,34 +1,38 @@
 import { createContext, useCallback, useEffect, useMemo, useState } from 'react';
-import { AUTH_SESSION_UPDATED_EVENT, AUTH_STORAGE_KEY, authAPI } from '../services/endpoints';
+import {
+  AUTH_SESSION_UPDATED_EVENT,
+  AUTH_STORAGE_KEY,
+  BRAND_OWNER_ROLE,
+  authAPI,
+  clearStoredSession,
+  extractTokenRoles,
+  hasBrandOwnerRole,
+  parseJwtPayload,
+  readStoredSession,
+  writeStoredSession,
+} from '../services/endpoints';
 
 const AuthContext = createContext(null);
 
-const parseJwtPayload = (token) => {
-  if (!token || typeof token !== 'string') {
-    return null;
-  }
+const BRAND_OWNER_ONLY_ERROR = 'Only brand owners can sign in to this dashboard';
 
-  const parts = token.split('.');
+const createBrandUser = (email, tokenPayload = {}, currentUser = {}) => {
+  const roles = Array.from(new Set([
+    ...extractTokenRoles(tokenPayload),
+    ...(Array.isArray(currentUser?.roles) ? currentUser.roles : []),
+    currentUser?.role,
+  ].filter(Boolean)));
 
-  if (parts.length < 2) {
-    return null;
-  }
+  const normalizedRole = roles[0] || BRAND_OWNER_ROLE;
 
-  try {
-    const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-    return JSON.parse(atob(padded));
-  } catch {
-    return null;
-  }
+  return {
+    id: tokenPayload?.sub || tokenPayload?.subject || currentUser?.id || email,
+    email,
+    name: tokenPayload?.name || tokenPayload?.preferred_username || currentUser?.name || email.split('@')[0] || 'Brand Owner',
+    role: normalizedRole,
+    roles,
+  };
 };
-
-const createBrandUser = (email, tokenPayload = {}) => ({
-  id: tokenPayload.sub || tokenPayload.subject || email,
-  email,
-  name: email.split('@')[0] || 'Local Brand',
-  role: tokenPayload.role || 'BRAND_OWNER',
-});
 
 const getTokenExpiry = (token) => {
   const payload = parseJwtPayload(token);
@@ -51,44 +55,62 @@ const isTokenExpired = (token, bufferMs = 15000) => {
   return Date.now() >= expiresAt - bufferMs;
 };
 
-const readStoredSession = () => {
-  const storedSession = localStorage.getItem(AUTH_STORAGE_KEY);
+const extractAuthErrorMessage = (error, fallbackMessage) => {
+  const status = Number(error?.response?.status || 0);
+  const responseData = error?.response?.data;
 
+  if (status >= 500) {
+    return 'service unavailable';
+  }
+
+  if (typeof responseData === 'string') {
+    return responseData;
+  }
+
+  return responseData?.message || error?.message || fallbackMessage;
+};
+
+const normalizeStoredSession = (storedSession) => {
   if (!storedSession) {
     return null;
   }
 
-  try {
-    const session = JSON.parse(storedSession);
-    const accessToken = session?.accessToken || session?.token;
-    const refreshToken = session?.refreshToken || '';
-    const tokenPayload = parseJwtPayload(accessToken) || {};
-    const email = tokenPayload.email || session?.user?.email;
+  const accessToken = storedSession?.accessToken || storedSession?.token;
+  const refreshToken = storedSession?.refreshToken || '';
+  const tokenPayload = parseJwtPayload(accessToken) || {};
+  const email = tokenPayload?.email || storedSession?.user?.email;
 
-    if (!accessToken || !email) {
-      return null;
-    }
-
-    return {
-      ...session,
-      accessToken,
-      refreshToken,
-      user: createBrandUser(email, tokenPayload),
-    };
-  } catch {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
+  if (!accessToken || !email || (!hasBrandOwnerRole(tokenPayload) && !hasBrandOwnerRole(storedSession?.user))) {
     return null;
   }
+
+  return {
+    ...storedSession,
+    accessToken,
+    refreshToken,
+    user: createBrandUser(email, tokenPayload, storedSession?.user),
+  };
+};
+
+const readNormalizedSession = () => {
+  const session = normalizeStoredSession(readStoredSession());
+
+  if (!session) {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+  }
+
+  return session;
 };
 
 export const AuthProvider = ({ children }) => {
-  const [session, setSession] = useState(readStoredSession);
+  const [session, setSession] = useState(readNormalizedSession);
   const [loading, setLoading] = useState(true);
   const [pendingEmail, setPendingEmail] = useState('');
+  const [pendingOtpCode, setPendingOtpCode] = useState('');
 
   useEffect(() => {
     const syncSession = () => {
-      setSession(readStoredSession());
+      setSession(readNormalizedSession());
     };
 
     window.addEventListener(AUTH_SESSION_UPDATED_EVENT, syncSession);
@@ -101,25 +123,24 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+    clearStoredSession();
     setSession(null);
     setPendingEmail('');
+    setPendingOtpCode('');
   }, []);
 
   const saveSession = useCallback((nextSession) => {
-    const normalizedSession = {
+    const normalizedSession = normalizeStoredSession({
       ...nextSession,
-      accessToken: nextSession.accessToken || nextSession.token || '',
-      refreshToken: nextSession.refreshToken || '',
-    };
+      accessToken: nextSession?.accessToken || nextSession?.token || '',
+      refreshToken: nextSession?.refreshToken || '',
+    });
 
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(normalizedSession));
-    localStorage.setItem('token', normalizedSession.accessToken);
-    localStorage.setItem('refreshToken', normalizedSession.refreshToken);
-    localStorage.setItem('user', JSON.stringify(normalizedSession.user));
+    if (!normalizedSession) {
+      throw new Error(BRAND_OWNER_ONLY_ERROR);
+    }
+
+    writeStoredSession(normalizedSession);
     setSession(normalizedSession);
   }, []);
 
@@ -140,17 +161,21 @@ export const AuthProvider = ({ children }) => {
     }
 
     const tokenPayload = parseJwtPayload(nextAccessToken) || {};
-    const email = tokenPayload.email || storedSession?.user?.email;
+    const email = tokenPayload?.email || storedSession?.user?.email;
 
     if (!email) {
       throw new Error('Unable to resolve user email from refreshed session');
+    }
+
+    if (!hasBrandOwnerRole(tokenPayload)) {
+      throw new Error(BRAND_OWNER_ONLY_ERROR);
     }
 
     const nextSession = {
       ...storedSession,
       accessToken: nextAccessToken,
       refreshToken: nextRefreshToken,
-      user: createBrandUser(email, tokenPayload),
+      user: createBrandUser(email, tokenPayload, storedSession?.user),
     };
 
     saveSession(nextSession);
@@ -161,7 +186,7 @@ export const AuthProvider = ({ children }) => {
     let isMounted = true;
 
     const initializeSession = async () => {
-      const storedSession = readStoredSession();
+      const storedSession = readNormalizedSession();
 
       if (!storedSession) {
         if (isMounted) {
@@ -211,7 +236,7 @@ export const AuthProvider = ({ children }) => {
     const normalizedEmail = email.trim().toLowerCase();
 
     try {
-      await authAPI.generateOtp({
+      const { data } = await authAPI.generateOtp({
         email: normalizedEmail,
         recipient: normalizedEmail,
         purpose: 'EMAIL',
@@ -219,19 +244,17 @@ export const AuthProvider = ({ children }) => {
       });
 
       setPendingEmail(normalizedEmail);
+      setPendingOtpCode(data?.otpCodeForTesting || '');
 
       return {
         success: true,
         email: normalizedEmail,
+        otpCodeForTesting: data?.otpCodeForTesting || '',
       };
     } catch (error) {
-      const message = error?.response?.data?.message
-        || error?.message
-        || 'Failed to send OTP';
-
       return {
         success: false,
-        error: message,
+        error: extractAuthErrorMessage(error, 'Failed to send OTP'),
       };
     }
   }, []);
@@ -258,7 +281,15 @@ export const AuthProvider = ({ children }) => {
       const accessToken = data?.accessToken || '';
       const refreshToken = data?.refreshToken || '';
       const tokenPayload = parseJwtPayload(accessToken) || {};
-      const user = createBrandUser(tokenPayload.email || normalizedEmail, tokenPayload);
+
+      if (!hasBrandOwnerRole(tokenPayload)) {
+        return {
+          success: false,
+          error: BRAND_OWNER_ONLY_ERROR,
+        };
+      }
+
+      const user = createBrandUser(tokenPayload?.email || normalizedEmail, tokenPayload);
 
       saveSession({
         accessToken,
@@ -268,6 +299,7 @@ export const AuthProvider = ({ children }) => {
       });
 
       setPendingEmail('');
+      setPendingOtpCode('');
 
       return {
         success: true,
@@ -276,12 +308,10 @@ export const AuthProvider = ({ children }) => {
         user,
       };
     } catch (error) {
-      const responseData = error?.response?.data;
-
       return {
         success: false,
-        error: responseData?.message || error?.message || 'Failed to verify OTP',
-        remainingAttempts: responseData?.remainingAttempts,
+        error: extractAuthErrorMessage(error, 'Failed to verify OTP'),
+        remainingAttempts: error?.response?.data?.remainingAttempts,
       };
     }
   }, [saveSession]);
@@ -294,11 +324,13 @@ export const AuthProvider = ({ children }) => {
     session,
     loading,
     pendingEmail,
+    pendingOtpCode,
     requestBrandOtp,
     verifyBrandOtp,
     logout,
     isAuthenticated: Boolean(session?.accessToken && session?.user),
-  }), [loading, logout, pendingEmail, requestBrandOtp, session, verifyBrandOtp]);
+    isBrandOwner: hasBrandOwnerRole(session?.user),
+  }), [loading, logout, pendingEmail, pendingOtpCode, requestBrandOtp, session, verifyBrandOtp]);
 
   return (
     <AuthContext.Provider value={value}>

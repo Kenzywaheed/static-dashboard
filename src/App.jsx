@@ -10,9 +10,13 @@ import Layout from './components/Layout/Layout';
 import Dashboard from './pages/Dashboard';
 import OrderManagement from './pages/OrderManagementLite';
 import AddProduct from './pages/AddProduct';
+import ProductManagement from './pages/ProductManagement';
+import ProductDetails from './pages/ProductDetails';
+import ProductVariants from './pages/ProductVariants';
 import Notifications from './pages/Notifications';
 import Calendar from './pages/CalendarLite';
 import CategoryManager from './pages/CategoryManager';
+import OrderModel from './pages/OrderModel';
 import Login from './pages/Login';
 import BrandSetup from './pages/BrandSetup';
 
@@ -44,14 +48,17 @@ function App() {
                       <Route path="/dashboard" element={<Dashboard />} />
                       <Route path="/orders" element={<OrderManagement />} />
                       <Route path="/orders/view" element={<OrderManagement />} />
-                      <Route path="/products" element={<AddProduct />} />
-                      <Route path="/products/view" element={<AddProduct />} />
+                      <Route path="/products" element={<ProductManagement />} />
+                      <Route path="/products/view" element={<ProductManagement />} />
+                      <Route path="/products/:productId/colors" element={<ProductDetails />} />
+                      <Route path="/products/:productId/colors/:colorId/variants" element={<ProductVariants />} />
                       <Route path="/add-product" element={<AddProduct />} />
                       <Route path="/products/add" element={<AddProduct />} />
                       <Route path="/categories/new" element={<CategoryManager />} />
                       <Route path="/categories/view" element={<CategoryManager />} />
                       <Route path="/add-category" element={<CategoryManager />} />
                       <Route path="/categories" element={<CategoryManager />} />
+                      <Route path="/collaboration" element={<OrderModel />} />
                       <Route path="/notifications" element={<Notifications />} />
                       <Route path="/calendar" element={<Calendar />} />
                     </Route>

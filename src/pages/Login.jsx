@@ -62,6 +62,14 @@ const getOtpErrorMessage = (t, errorMessage, remainingAttempts) => {
     return t.auth.emailRequired;
   }
 
+  if (normalizedMessage === 'service unavailable') {
+    return t.auth.backendUnavailable;
+  }
+
+  if (normalizedMessage === 'only brand owners can sign in to this dashboard') {
+    return 'This email is not allowed to access the brand dashboard.';
+  }
+
   return errorMessage || t.auth.unexpectedOtpError;
 };
 

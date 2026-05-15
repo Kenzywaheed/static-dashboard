@@ -15,6 +15,7 @@ const findFirstArrayInObject = (value, seen = new Set()) => {
 export const normalizeCollectionResponse = (data) => (
   [
     data?.content,
+    data?.data,
     data?.products,
     data?.items,
     data?.result,
@@ -29,6 +30,7 @@ export const normalizeCollectionResponse = (data) => (
 export const normalizeCategoryCollectionResponse = (data) => (
   [
     data?.content,
+    data?.data,
     data?.categories,
     data?.items,
     data?.result,
@@ -42,6 +44,10 @@ export const normalizeCategoryCollectionResponse = (data) => (
 export const normalizeCategory = (category) => ({
   id: String(category?.id || category?.categoryId || ''),
   name: category?.categoryNameEn || category?.categoryName || category?.name || '',
+  nameAr: category?.categoryNameAr || '',
+  descriptionEn: category?.categoryDescriptionEn || category?.categoryDescription || '',
+  descriptionAr: category?.categoryDescriptionAr || '',
+  icon: category?.categoryIcon || category?.imageUrl || '',
 });
 
 export const normalizeProductImage = (image, index = 0) => {
@@ -59,7 +65,11 @@ export const normalizeProductImage = (image, index = 0) => {
 };
 
 export const getEffectiveVariantPrice = (variant, basePrice) => {
-  const override = variant?.priceOverride;
+  if (variant?.effectivePrice !== null && variant?.effectivePrice !== undefined && variant?.effectivePrice !== '') {
+    return Number(variant.effectivePrice);
+  }
+
+  const override = variant?.price ?? variant?.priceOverride;
   return override !== null && override !== undefined && override !== ''
     ? Number(override)
     : Number(basePrice || 0);
@@ -70,7 +80,7 @@ export const normalizeVariant = (variant, basePrice) => ({
   size: String(variant?.size || variant?.sizeName || ''),
   sku: variant?.sku || '',
   stock: Number(variant?.stock || 0),
-  priceOverride: variant?.priceOverride ?? null,
+  priceOverride: variant?.price ?? variant?.priceOverride ?? null,
   effectivePrice: getEffectiveVariantPrice(variant, basePrice),
 });
 
@@ -79,28 +89,41 @@ export const normalizeColor = (color, basePrice) => ({
   colorCode: color?.colorCode || '#111827',
   images: (color?.images || color?.imageUrls || []).map(normalizeProductImage).filter((image) => image.imageUrl),
   variants: (color?.variants || color?.productVariants || color?.variantList || []).map((variant) => normalizeVariant(variant, basePrice)),
+  variantsCount: Number(color?.variantsCount ?? color?.variantCount ?? 0),
+  totalStock: Number(color?.totalStock ?? 0),
 });
 
 export const normalizeProduct = (product) => {
   const basePrice = Number(product?.basePrice ?? product?.productPrice ?? product?.price ?? 0);
   const colors = (product?.colors || product?.productColors || product?.colorOptions || []).map((color) => normalizeColor(color, basePrice));
+  const categoryNameEn = product?.categoryNameEn || product?.category?.categoryNameEn || product?.category?.name || product?.categoryName || '';
+  const categoryNameAr = product?.categoryNameAr || product?.category?.categoryNameAr || '';
+  const colorCount = Number(product?.currentColors ?? product?.colorCount ?? colors.length ?? 0);
 
   return {
     id: String(product?.id || product?.productId || ''),
     productName: product?.productName || product?.productNameEn || product?.name || '',
+    productNameEn: product?.productNameEn || product?.productName || product?.name || '',
+    productNameAr: product?.productNameAr || '',
     description: product?.description || product?.productDescriptionEn || product?.descriptionEn || '',
+    descriptionEn: product?.productDescriptionEn || product?.descriptionEn || product?.description || '',
+    descriptionAr: product?.productDescriptionAr || '',
     basePrice,
     brandName: product?.brand?.name || product?.brandName || '',
-    categoryName: product?.category?.name || product?.categoryName || product?.categoryNameEn || '',
+    categoryName: categoryNameEn || categoryNameAr || '',
+    categoryNameEn,
+    categoryNameAr,
     categoryId: String(product?.category?.id || product?.categoryId || ''),
     avgRating: Number(product?.rating?.avgRating || product?.avgRating || 0),
     ratingCount: Number(product?.rating?.ratingCount || product?.ratingCount || 0),
+    thumbnail: product?.thumbnail || product?.thumbnailUrl || product?.imageUrl || '',
+    colorCount,
     colors,
   };
 };
 
 export const getProductMainImage = (product) => (
-  product?.colors?.[0]?.images?.[0]?.imageUrl || ''
+  product?.thumbnail || product?.colors?.[0]?.images?.[0]?.imageUrl || ''
 );
 
 export const getProductMinPrice = (product) => {
@@ -121,7 +144,9 @@ export const getProductTotalStock = (product) => (
   ), 0)
 );
 
-export const getProductColorCount = (product) => product?.colors?.length || 0;
+export const getProductColorCount = (product) => (
+  Number(product?.colorCount ?? product?.currentColors ?? product?.colors?.length ?? 0)
+);
 
 export const getProductAvailableSizes = (color) => (
   (color?.variants || []).map((variant) => variant.size).filter(Boolean)

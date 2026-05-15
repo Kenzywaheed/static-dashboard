@@ -32,6 +32,7 @@ export const dashboardTranslations = {
       userNotFound: 'No user was found with this email.',
       otpPurposeRequired: 'OTP purpose is missing.',
       otpChannelRequired: 'OTP channel is missing.',
+      backendUnavailable: 'The backend is unavailable right now. Please try again in a moment.',
       unexpectedOtpError: 'Something went wrong while checking the OTP.',
       otpSent: 'OTP sent to your email',
       loginSuccess: 'Welcome. Let us make the workspace feel like yours.',
@@ -322,6 +323,7 @@ export const dashboardTranslations = {
       userNotFound: 'لا يوجد مستخدم بهذا البريد الإلكتروني.',
       otpPurposeRequired: 'نوع استخدام رمز OTP غير موجود.',
       otpChannelRequired: 'قناة رمز OTP غير موجودة.',
+      backendUnavailable: 'الخادم غير متاح الآن. حاول مرة أخرى بعد قليل.',
       unexpectedOtpError: 'حدث خطأ أثناء التحقق من رمز OTP.',
       otpSent: 'تم إرسال الرمز إلى بريدك',
       loginSuccess: 'أهلاً بك في لوحة التحكم',
@@ -742,4 +744,54 @@ Object.assign(dashboardTranslations.ar.product.toasts, {
   productSaveFailed: 'فشل حفظ المنتج',
   itemAdded: 'تم حفظ عنصر المنتج',
   productRemoved: 'تم حذف المنتج',
+});
+Object.assign(dashboardTranslations.en.auth, {
+  simpleAccessTitle: 'Simple access',
+  simpleAccessLine1: 'Use your brand email to receive a one-time code.',
+  simpleAccessLine2: 'If the backend returns a testing OTP, it will appear on the next step.',
+  simpleAccessLine3: 'After verification, the dashboard keeps access and refresh tokens updated automatically.',
+  testingOtpLabel: 'Testing OTP from API response',
+});
+
+Object.assign(dashboardTranslations.en.product, {
+  productNameEn: 'Product name in English',
+  productNameAr: 'Product name in Arabic',
+  descriptionEn: 'Description in English',
+  descriptionAr: 'Description in Arabic',
+  saveProductAndContinue: 'Save product and continue',
+  saveColorAndContinue: 'Save color and continue',
+  saveVariantsAndContinue: 'Save variants and add another color',
+  variantPrice: 'Variant price',
+});
+
+Object.assign(dashboardTranslations.en.product.errors, {
+  productNameEn: 'English product name is required',
+  productNameAr: 'Arabic product name is required',
+  productDescriptionEn: 'English description is required',
+  productDescriptionAr: 'Arabic description is required',
+  variantPrice: 'Enter a valid price for each variant',
+});
+
+Object.assign(dashboardTranslations.en.product.toasts, {
+  productSavedToApi: 'Product created. Add colors next.',
+  productSaveFailed: 'Failed to create product',
+});
+
+Object.assign(dashboardTranslations.ar.auth, {
+  simpleAccessTitle: 'دخول بسيط',
+  simpleAccessLine1: 'اكتب إيميل البراند ليصلك رمز استخدام مرة واحدة.',
+  simpleAccessLine2: 'إذا كان الـ backend يرجع رمز اختبار فسيظهر لك في الخطوة التالية.',
+  simpleAccessLine3: 'بعد التحقق، يتم حفظ access token و refresh token وتجديدهما تلقائيًا.',
+  testingOtpLabel: 'رمز الاختبار من استجابة الـ API',
+});
+
+Object.assign(dashboardTranslations.ar.product, {
+  saveProductAndContinue: 'حفظ المنتج والمتابعة',
+  saveColorAndContinue: 'حفظ اللون والمتابعة',
+  saveVariantsAndContinue: 'حفظ المقاسات وإضافة لون آخر',
+  variantPrice: 'سعر المقاس',
+});
+
+Object.assign(dashboardTranslations.ar.product.errors, {
+  variantPrice: 'اكتب سعرًا صحيحًا لكل مقاس',
 });

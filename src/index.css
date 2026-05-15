@@ -7,7 +7,7 @@
 body {
   font-family: 'Manrope', sans-serif;
   color: #0f172a;
-  background: #f7f4ef;
+  background: #f5f2eb;
 }
 
 * {
@@ -17,11 +17,11 @@ body {
 }
 
 :root {
-  --sidebar-bg: #f7f2ea;
-  --content-bg: #f8f6f2;
-  --brand-primary: #5c8d86;
-  --brand-primary-dark: #476f69;
-  --brand-primary-soft: #dcece8;
+  --sidebar-bg: #f3eee6;
+  --content-bg: #f7f4ee;
+  --brand-primary: #3f6f68;
+  --brand-primary-dark: #345d57;
+  --brand-primary-soft: #d9e7e4;
 }
 
 .sidebar {
@@ -34,19 +34,6 @@ body {
 
 html[dir='rtl'] body {
   font-family: 'IBM Plex Sans Arabic', sans-serif;
-}
-
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
-  background-size: 32px 32px;
-  mask-image: radial-gradient(circle at center, black 22%, transparent 85%);
-  opacity: 0.3;
 }
 
 @layer utilities {
@@ -96,7 +83,7 @@ body::before {
 
 .dark body {
   color: #e2e8f0;
-  background: #020617;
+  background: #0b1120;
 }
 
 /* Custom scrollbar */

@@ -37,7 +37,7 @@ const Layout = () => {
   const desktopSidebarOffset = sidebarVisible ? (isRtl ? 'xl:mr-64' : 'xl:ml-64') : '';
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+    <div className="min-h-screen bg-[var(--content-bg)] dark:bg-slate-950">
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-slate-950/40 xl:hidden"
@@ -62,7 +62,7 @@ const Layout = () => {
           setIsDarkMode={setIsDarkMode}
         />
 
-        <main className="px-4 py-6 sm:px-6">
+        <main className="px-4 py-5 sm:px-6">
           <Outlet />
         </main>
       </div>

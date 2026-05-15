@@ -11,9 +11,9 @@ import {
   TrashIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
+import { normalizePaginatedResponse } from '../services/apiResponseUtils';
 import { categoriesAPI } from '../services/endpoints';
 import { useLanguage } from '../hooks/useLanguage';
-import { useAuth } from '../hooks/useAuth';
 
 const PAGE_SIZE = 10;
 
@@ -81,51 +81,6 @@ const mapCategoryFromApi = (category) => ({
   icon: category.imageUrl || category.categoryIcon || '',
 });
 
-const findFirstArrayInObject = (value, seen = new Set()) => {
-  if (Array.isArray(value)) return value;
-  if (!value || typeof value !== 'object' || seen.has(value)) return null;
-
-  seen.add(value);
-
-  for (const nestedValue of Object.values(value)) {
-    const match = findFirstArrayInObject(nestedValue, seen);
-    if (match) return match;
-  }
-
-  return null;
-};
-
-const normalizeCategoriesResponse = (data) => {
-  const content = [
-    data?.content,
-    data?.categories,
-    data?.data?.content,
-    data?.data?.categories,
-    data?.items,
-    data?.result,
-    findFirstArrayInObject(data),
-    Array.isArray(data) ? data : null,
-  ].find(Array.isArray) || [];
-
-  const totalElements = [
-    data?.totalElements,
-    data?.total,
-    data?.count,
-    data?.data?.totalElements,
-    data?.data?.total,
-    content.length,
-  ].find((value) => typeof value === 'number') || 0;
-
-  const totalPages = [
-    data?.totalPages,
-    data?.pages,
-    data?.data?.totalPages,
-    Math.max(Math.ceil((totalElements || content.length) / PAGE_SIZE), 1),
-  ].find((value) => typeof value === 'number') || 1;
-
-  return { content, totalElements, totalPages };
-};
-
 const getApiErrorMessage = (err, fallbackMessage) => {
   const responseData = err.response?.data;
   if (typeof responseData === 'string') return responseData;
@@ -159,10 +114,8 @@ const revokePreviewIfNeeded = (preview) => {
 
 const CategoryManager = () => {
   const { t, language } = useLanguage();
-  const { user } = useAuth();
   const location = useLocation();
   const text = t.category;
-  const brandId = user?.id || '';
   const isExplorerRoute = location.pathname === '/categories' || location.pathname === '/categories/view';
 
   const [step, setStep] = useState('builder');
@@ -171,6 +124,12 @@ const CategoryManager = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalCategories, setTotalCategories] = useState(0);
+  const [stats, setStats] = useState({
+    total: 0,
+    root: 0,
+    sub: 0,
+    male: 0,
+  });
   const [editingCategoryId, setEditingCategoryId] = useState('');
   const [expandedCategoryId, setExpandedCategoryId] = useState(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
@@ -212,28 +171,7 @@ const CategoryManager = () => {
     return parent ? getCategoryName(parent) : text.noParent;
   }, [categories, getCategoryName, text.noParent]);
 
-  const stats = useMemo(() => ({
-    total: totalCategories,
-    root: categories.filter((category) => !category.parentId).length,
-    sub: categories.filter((category) => category.parentId).length,
-    male: categories.filter((category) => category.gender === 'M' || category.gender === 'MALE').length,
-  }), [categories, totalCategories]);
-
-  const filteredCategories = useMemo(() => (
-    categories.filter((category) => {
-      const matchesSearch = !categorySearch.trim() || [
-        category.nameEn,
-        category.nameAr,
-        category.detailsEn,
-        category.detailsAr,
-      ].some((value) => String(value || '').toLowerCase().includes(categorySearch.trim().toLowerCase()));
-
-      const normalizedGender = String(category.gender || '').toUpperCase();
-      const matchesGender = genderFilter === 'all' || normalizedGender === genderFilter;
-
-      return matchesSearch && matchesGender;
-    })
-  ), [categories, categorySearch, genderFilter]);
+  const filteredCategories = useMemo(() => categories, [categories]);
 
   const resetForm = useCallback(() => {
     setForm(EMPTY_CATEGORY_FORM);
@@ -247,32 +185,39 @@ const CategoryManager = () => {
   }, []);
 
   const loadCategories = useCallback(async (page) => {
-    if (!brandId) {
-      const demoCategories = getDemoCategoryPage(page);
-      setCategories(demoCategories);
-      setCurrentPage(page);
-      setTotalPages(0);
-      setTotalCategories(0);
-      setSelectedCategoryId(demoCategories[0]?.id || '');
-      setExpandedCategoryId(demoCategories[0]?.id || null);
-      setDetailsOpen(false);
-      setListError(text.brandRequired);
-      return;
-    }
-
     setLoading(true);
     setListError('');
 
     try {
-      const { data } = await categoriesAPI.getAll({ brandId, page, size: PAGE_SIZE });
-      const normalized = normalizeCategoriesResponse(data);
-      const mappedCategories = normalized.content.map(mapCategoryFromApi);
+      const normalizedGenderFilter = genderFilter === 'all'
+        ? ''
+        : genderFilter === 'M'
+          ? 'MALE'
+          : 'FEMALE';
+      const [{ data }, statsResponse] = await Promise.all([
+        categoriesAPI.getAll({
+          page,
+          size: PAGE_SIZE,
+          search: categorySearch.trim(),
+          gender: normalizedGenderFilter,
+        }),
+        categoriesAPI.stats().catch(() => null),
+      ]);
+      const normalized = normalizePaginatedResponse(data, { fallbackPage: page, fallbackSize: PAGE_SIZE });
+      const mappedCategories = normalized.items.map(mapCategoryFromApi);
       const nextCategories = mappedCategories.length ? mappedCategories : getDemoCategoryPage(page);
+      const statsData = statsResponse?.data;
 
       setCategories(nextCategories);
-      setCurrentPage(page);
+      setCurrentPage(normalized.page);
       setTotalPages(mappedCategories.length ? normalized.totalPages : 0);
       setTotalCategories(mappedCategories.length ? normalized.totalElements : 0);
+      setStats({
+        total: Number(statsData?.totalCategories ?? normalized.totalElements ?? 0),
+        root: Number(statsData?.withoutParentCategories ?? nextCategories.filter((category) => !category.parentId).length),
+        sub: Number(statsData?.withParentCategories ?? nextCategories.filter((category) => category.parentId).length),
+        male: Number(statsData?.maleCategories ?? nextCategories.filter((category) => category.gender === 'M' || category.gender === 'MALE').length),
+      });
 
       if (nextCategories.length === 0) {
         setSelectedCategoryId('');
@@ -299,6 +244,12 @@ const CategoryManager = () => {
       setCurrentPage(page);
       setTotalPages(0);
       setTotalCategories(0);
+      setStats({
+        total: 0,
+        root: 0,
+        sub: 0,
+        male: 0,
+      });
       setSelectedCategoryId(demoCategories[0]?.id || '');
       setExpandedCategoryId(demoCategories[0]?.id || null);
       setDetailsOpen(false);
@@ -306,7 +257,7 @@ const CategoryManager = () => {
     } finally {
       setLoading(false);
     }
-  }, [brandId, text.brandRequired, text.loadFailed]);
+  }, [categorySearch, genderFilter, text.loadFailed]);
 
   useEffect(() => {
     loadCategories(0);
@@ -419,13 +370,16 @@ const CategoryManager = () => {
 
   return (
     <div className="space-y-8">
-      <section className="overflow-hidden rounded-[32px] border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-blue-50/80 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900">
-        <div className="grid gap-8 px-6 py-7 lg:grid-cols-[minmax(0,1fr)_280px] lg:px-8">
+      <section className="rounded-[28px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_260px]">
           <div>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">{isExplorerRoute ? 'Categories' : text.title}</h1>
+            <h1 className="text-3xl font-bold text-slate-950 dark:text-white">{isExplorerRoute ? 'Categories' : text.title}</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+              Add the category first, then return to the list and continue organizing your store sections clearly.
+            </p>
             <div className="mt-5 flex flex-wrap items-center gap-3 text-sm">
               {isEditing && (
-                <span className="rounded-full border border-blue-200 bg-blue-100 px-4 py-2 font-semibold text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
+                <span className="rounded-full bg-[var(--brand-primary-soft)] px-4 py-2 font-semibold text-slate-800">
                   {text.editingBadge}
                 </span>
               )}
@@ -477,7 +431,7 @@ const CategoryManager = () => {
             onClick={() => setStep(navStep.id)}
             className={`rounded-3xl border p-5 text-start transition ${
               step === navStep.id
-                ? 'border-blue-200 bg-blue-50 text-blue-900 shadow-sm dark:border-blue-900 dark:bg-blue-950 dark:text-blue-100'
+                ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-soft)] text-slate-900 shadow-sm'
                 : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'
             }`}
           >
@@ -489,7 +443,7 @@ const CategoryManager = () => {
       )}
 
       {step === 'builder' && (
-        <section className="grid gap-8 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <section className="grid gap-6 xl:grid-cols-1">
           <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="group relative aspect-square w-full overflow-hidden rounded-[24px] bg-slate-100 dark:bg-slate-950">
               {iconPreview ? (
@@ -554,7 +508,7 @@ const CategoryManager = () => {
                       type="button"
                       onClick={() => updateFormField('gender', option.value)}
                       disabled={saving || isEditing}
-                      className={`rounded-lg border px-4 py-3 text-sm font-bold transition ${form.gender === option.value ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-950 dark:text-blue-100' : 'border-gray-300 text-gray-700 hover:border-blue-300 dark:border-gray-700 dark:text-gray-200'} disabled:opacity-50`}
+                      className={`rounded-lg border px-4 py-3 text-sm font-bold transition ${form.gender === option.value ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-soft)] text-slate-900' : 'border-gray-300 text-gray-700 hover:border-gray-400 dark:border-gray-700 dark:text-gray-200'} disabled:opacity-50`}
                     >
                       {option.label}
                     </button>
@@ -582,7 +536,7 @@ const CategoryManager = () => {
                 <button type="button" onClick={resetForm} className="rounded-lg border border-gray-300 px-5 py-3 text-sm font-bold text-gray-800 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800">
                   {text.clear}
                 </button>
-                <button type="submit" disabled={saving} className="rounded-lg bg-blue-600 px-7 py-3 font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50">
+                <button type="submit" disabled={saving} className="rounded-lg bg-[var(--brand-primary)] px-7 py-3 font-bold text-white transition hover:bg-[var(--brand-primary-dark)] disabled:opacity-50">
                   {saving ? text.saving : isEditing ? text.update : text.create}
                 </button>
               </div>
@@ -612,13 +566,19 @@ const CategoryManager = () => {
             <div className="mb-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
               <input
                 value={categorySearch}
-                onChange={(event) => setCategorySearch(event.target.value)}
+                onChange={(event) => {
+                  setCategorySearch(event.target.value);
+                  setCurrentPage(0);
+                }}
                 placeholder={text.searchCategories || 'Search categories'}
                 className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
               />
               <select
                 value={genderFilter}
-                onChange={(event) => setGenderFilter(event.target.value)}
+                onChange={(event) => {
+                  setGenderFilter(event.target.value);
+                  setCurrentPage(0);
+                }}
                 className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
               >
                 <option value="all">{text.allGenders || 'All genders'}</option>
