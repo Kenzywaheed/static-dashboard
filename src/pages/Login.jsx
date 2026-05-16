@@ -8,6 +8,7 @@ import {
   LanguageIcon,
   ShieldCheckIcon,
 } from '@heroicons/react/24/outline';
+import brandLogo from '../assets/branding/dx-logo-transparent.png';
 import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../hooks/useLanguage';
 
@@ -169,6 +170,13 @@ const Login = () => {
             className="absolute inset-0 h-full w-full object-cover opacity-55"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/75 to-gray-950/25" />
+          <div className="pointer-events-none absolute right-8 top-8 rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur-sm xl:right-12 xl:top-12">
+            <img
+              src={brandLogo}
+              alt=""
+              className="h-28 w-28 object-contain opacity-80 drop-shadow-2xl xl:h-36 xl:w-36"
+            />
+          </div>
           <div className="relative flex min-h-screen flex-col justify-end p-12">
             <div className="mb-8 inline-flex w-fit items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold backdrop-blur">
               <ShieldCheckIcon className="h-5 w-5" />
@@ -181,12 +189,26 @@ const Login = () => {
 
         <main className="flex min-h-screen items-center justify-center px-5 py-10 sm:px-8">
           <div className="w-full max-w-md">
-            <div className="mb-8 flex items-center justify-between gap-4">
+            <div className="mb-6 inline-flex items-center gap-4 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm shadow-gray-200/70 dark:border-gray-800 dark:bg-gray-900 dark:shadow-black/20">
+              <img
+                src={brandLogo}
+                alt="DX logo"
+                className="h-14 w-14 rounded-xl bg-gray-50 p-2 object-contain dark:bg-gray-800"
+              />
               <div>
-                <p className="text-sm font-semibold uppercase text-blue-600 dark:text-blue-400">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-600 dark:text-blue-400">
                   {t.header.localBrand}
                 </p>
-                <h1 className="mt-2 text-3xl font-bold text-gray-950 dark:text-white">{t.auth.title}</h1>
+                <p className="mt-1 text-sm font-medium text-gray-500 dark:text-gray-300">
+                  DX Brand Dashboard
+                </p>
+              </div>
+            </div>
+
+            <div className="mb-8 flex items-center justify-between gap-4">
+              <div className="max-w-xs">
+                <h1 className="text-3xl font-bold text-gray-950 dark:text-white">{t.auth.title}</h1>
+                <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-300">{t.auth.subtitle}</p>
               </div>
               <button
                 type="button"
