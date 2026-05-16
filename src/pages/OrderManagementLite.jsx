@@ -76,16 +76,20 @@ const buildTimeline = (order) => (
   ].filter((entry) => entry.eventAt)
 );
 
-const formatShippingAddress = (shippingAddress = {}) => (
-  [
-    shippingAddress.formattedAddressEn,
+const formatShippingAddress = (shippingAddress) => {
+  if (!shippingAddress) {
+    return 'No shipping address available';
+  }
+
+  return [
+    shippingAddress?.formattedAddressEn,
     [
-      shippingAddress.buildingNumber,
-      shippingAddress.streetEn,
-      shippingAddress.cityEn,
+      shippingAddress?.buildingNumber,
+      shippingAddress?.streetEn,
+      shippingAddress?.cityEn,
     ].filter(Boolean).join(', '),
-  ].find(Boolean) || 'Address not available'
-);
+  ].find(Boolean) || 'No shipping address available';
+};
 
 const canShipOrder = (order) => ['PENDING', 'PAID'].includes(String(order?.orderStatus || '').toUpperCase());
 const canDeliverOrder = (order) => String(order?.orderStatus || '').toUpperCase() === 'SHIPPED';
@@ -405,10 +409,18 @@ export default function OrderManagementLite() {
 
               <section className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
                 <h3 className="text-sm font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Shipping</h3>
-                <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
-                  <p>{formatShippingAddress(selectedOrder.shippingAddress)}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{selectedOrder.shippingAddress?.formattedAddressAr || ''}</p>
-                </div>
+                {selectedOrder.shippingAddress ? (
+                  <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
+                    <p>{formatShippingAddress(selectedOrder.shippingAddress)}</p>
+                    {selectedOrder.shippingAddress?.formattedAddressAr ? (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{selectedOrder.shippingAddress?.formattedAddressAr}</p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-400">
+                    No shipping address available
+                  </div>
+                )}
               </section>
 
               <section>
