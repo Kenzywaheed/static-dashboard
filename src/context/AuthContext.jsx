@@ -16,6 +16,38 @@ const AuthContext = createContext(null);
 
 const BRAND_OWNER_ONLY_ERROR = 'Only brand owners can sign in to this dashboard';
 
+const toIdentityValue = (value) => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  return String(value).trim();
+};
+
+const extractBrandId = (...sources) => {
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') {
+      continue;
+    }
+
+    const brandId = [
+      source.brandId,
+      source.brand_id,
+      source.brand?.brandId,
+      source.brand?.brand_id,
+      source.brand?.id,
+      source.brandProfileId,
+      source.brandProfile?.id,
+    ].map(toIdentityValue).find(Boolean);
+
+    if (brandId) {
+      return brandId;
+    }
+  }
+
+  return '';
+};
+
 const createBrandUser = (email, tokenPayload = {}, currentUser = {}) => {
   const roles = Array.from(new Set([
     ...extractTokenRoles(tokenPayload),
@@ -24,13 +56,16 @@ const createBrandUser = (email, tokenPayload = {}, currentUser = {}) => {
   ].filter(Boolean)));
 
   const normalizedRole = roles[0] || BRAND_OWNER_ROLE;
+  const brandId = extractBrandId(currentUser, tokenPayload);
 
   return {
+    ...currentUser,
     id: tokenPayload?.sub || tokenPayload?.subject || currentUser?.id || email,
-    email,
+    email: currentUser?.email || tokenPayload?.email || email,
     name: tokenPayload?.name || tokenPayload?.preferred_username || currentUser?.name || email.split('@')[0] || 'Brand Owner',
     role: normalizedRole,
     roles,
+    brandId,
   };
 };
 
@@ -84,11 +119,14 @@ const normalizeStoredSession = (storedSession) => {
     return null;
   }
 
+  const user = createBrandUser(email, tokenPayload, storedSession?.user);
+
   return {
     ...storedSession,
     accessToken,
     refreshToken,
-    user: createBrandUser(email, tokenPayload, storedSession?.user),
+    brandId: user.brandId || extractBrandId(storedSession, tokenPayload),
+    user,
   };
 };
 
@@ -289,11 +327,12 @@ export const AuthProvider = ({ children }) => {
         };
       }
 
-      const user = createBrandUser(tokenPayload?.email || normalizedEmail, tokenPayload);
+      const user = createBrandUser(tokenPayload?.email || normalizedEmail, tokenPayload, data?.user || {});
 
       saveSession({
         accessToken,
         refreshToken,
+        brandId: user.brandId,
         user,
         authenticatedAt: new Date().toISOString(),
       });
@@ -321,6 +360,7 @@ export const AuthProvider = ({ children }) => {
     token: session?.accessToken || '',
     accessToken: session?.accessToken || '',
     refreshToken: session?.refreshToken || '',
+    brandId: session?.brandId || session?.user?.brandId || '',
     session,
     loading,
     pendingEmail,

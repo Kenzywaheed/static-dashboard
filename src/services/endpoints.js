@@ -7,6 +7,7 @@ export const BRAND_OWNER_ROLE = 'ROLE_BRAND_OWNER';
 export const API_BASE_URL = 'https://ecommerce-app-e6303c36e118.herokuapp.com';
 
 const OTP_BASE_URL = `${API_BASE_URL}/api/v1/public/otp`;
+const CUSTOMER_BRANDS_BASE_URL = '/api/v1/customer/brands';
 const DASHBOARD_HOME_URL = '/api/v1/brands/dashboard/home';
 const ORDERS_BASE_URL = '/api/v1/brands/orders';
 const CALENDAR_BASE_URL = '/api/v1/brands/calendar';
@@ -211,6 +212,61 @@ const toJsonPayload = (data = {}) => Object.fromEntries(
   Object.entries(data).filter(([, value]) => value !== null && value !== undefined && value !== ''),
 );
 
+const parseResponseBody = async (response) => {
+  const contentType = response.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+
+  const text = await response.text();
+
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+};
+
+const createHttpError = (status, data, fallbackMessage) => {
+  const error = new Error(
+    (typeof data === 'string' && data)
+    || data?.message
+    || fallbackMessage,
+  );
+
+  error.response = {
+    status,
+    data,
+  };
+
+  return error;
+};
+
+const postJson = async (url, payload, { headers = {} } = {}) => {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+    body: JSON.stringify(toJsonPayload(payload)),
+  });
+
+  const data = await parseResponseBody(response);
+
+  if (!response.ok) {
+    throw createHttpError(response.status, data, `Request failed with status ${response.status}`);
+  }
+
+  return { data };
+};
+
 const isFileLike = (value) => value instanceof Blob || value instanceof File;
 
 const appendFormDataValue = (formData, key, value, { keepEmptyStrings = false } = {}) => {
@@ -284,7 +340,7 @@ const refreshAccessToken = async (session) => {
   }
 
   if (!refreshPromise) {
-    refreshPromise = axios.post(`${OTP_BASE_URL}/refresh`, { refreshToken })
+    refreshPromise = postJson(`${OTP_BASE_URL}/refresh`, { refreshToken })
       .then(({ data }) => {
         const nextSession = {
           ...session,
@@ -349,37 +405,31 @@ apiClient.interceptors.response.use(
 );
 
 export const authAPI = {
-  generateOtp: ({ email, recipient, purpose = 'EMAIL', channel = 'LOGIN', expiryMinutes }) => axios.post(
+  generateOtp: ({ email, recipient, purpose = 'EMAIL', channel = 'LOGIN', expiryMinutes }) => postJson(
     `${OTP_BASE_URL}/generate`,
-    toJsonPayload({
+    {
       email,
       recipient,
       purpose,
       channel,
       expiryMinutes,
-    }),
-    {
-      headers: {
-        'Content-Type': 'application/json',
-      },
     },
   ),
 
-  verifyOtp: ({ recipient, purpose = 'EMAIL', otpCode }) => axios.post(
+  verifyOtp: ({ recipient, purpose = 'EMAIL', otpCode }) => postJson(
     `${OTP_BASE_URL}/verify`,
-    toJsonPayload({
+    {
       recipient,
       purpose,
       otpCode,
-    }),
-    {
-      headers: {
-        'Content-Type': 'application/json',
-      },
     },
   ),
 
-  refreshToken: (refreshToken) => axios.post(`${OTP_BASE_URL}/refresh`, { refreshToken }),
+  refreshToken: (refreshToken) => postJson(`${OTP_BASE_URL}/refresh`, { refreshToken }),
+};
+
+export const customerBrandsAPI = {
+  getById: (brandId) => apiClient.get(`${CUSTOMER_BRANDS_BASE_URL}/${encodeURIComponent(brandId)}`),
 };
 
 export const dashboardAPI = {
