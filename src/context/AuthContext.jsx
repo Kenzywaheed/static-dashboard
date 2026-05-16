@@ -38,6 +38,9 @@ const extractBrandId = (...sources) => {
       source.brand?.id,
       source.brandProfileId,
       source.brandProfile?.id,
+      source.id,
+      source.sub,
+      source.subject,
     ].map(toIdentityValue).find(Boolean);
 
     if (brandId) {
