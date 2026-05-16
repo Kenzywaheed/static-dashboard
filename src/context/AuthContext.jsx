@@ -240,7 +240,7 @@ export const AuthProvider = ({ children }) => {
         email: normalizedEmail,
         recipient: normalizedEmail,
         purpose: 'EMAIL',
-        channel: 'LOGIN',
+        channel: 'EMAIL_VERIFICATION',
       });
 
       setPendingEmail(normalizedEmail);
