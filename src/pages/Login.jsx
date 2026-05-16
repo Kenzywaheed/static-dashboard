@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeftIcon,
   EnvelopeIcon,
@@ -81,17 +81,27 @@ const Login = () => {
   } = useAuth();
   const { language, setLanguage, t, isRtl } = useLanguage();
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState('email');
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const redirectPath = useMemo(() => {
+    const redirectFrom = location.state?.from;
+
+    if (!redirectFrom?.pathname || redirectFrom.pathname === '/login') {
+      return '/setup';
+    }
+
+    return `${redirectFrom.pathname}${redirectFrom.search || ''}${redirectFrom.hash || ''}`;
+  }, [location.state]);
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/setup', { replace: true });
+      navigate(redirectPath, { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, redirectPath]);
 
   const toggleLanguage = () => {
     setLanguage(language === 'en' ? 'ar' : 'en');
@@ -146,7 +156,7 @@ const Login = () => {
     }
 
     toast.success(t.auth.loginSuccess);
-    navigate('/setup', { replace: true });
+    navigate(redirectPath, { replace: true });
   };
 
   return (

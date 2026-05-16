@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import {
   ArrowPathIcon,
   BanknotesIcon,
@@ -106,6 +107,8 @@ const baseCardClass = 'rounded-[28px] border border-slate-200 bg-white p-6 shado
 const OrderModel = () => {
   const queryClient = useQueryClient();
   const { language } = useLanguage();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reviewSectionRef = useRef(null);
   const [activeTab, setActiveTab] = useState('discover');
   const [modelPage, setModelPage] = useState(0);
   const [requestPage, setRequestPage] = useState(0);
@@ -123,6 +126,8 @@ const OrderModel = () => {
   const [revisionDrafts, setRevisionDrafts] = useState({});
   const [paymentForm, setPaymentForm] = useState(createDefaultPaymentForm());
   const [reviewForm, setReviewForm] = useState(createDefaultReviewForm());
+  const routeAgreementId = searchParams.get('agreementId') || '';
+  const routeSection = searchParams.get('section') || '';
 
   const ui = language === 'ar'
     ? {
@@ -403,12 +408,60 @@ const OrderModel = () => {
     awaitingPayment: agreements.filter((agreement) => agreement.agreementStatus === 'AWAITING_PAYMENT').length,
   }), [agreements, agreementsQuery.data?.totalElements, modelsQuery.data?.totalElements, requestsQuery.data?.totalElements]);
 
+  useEffect(() => {
+    if (!routeAgreementId) {
+      return;
+    }
+
+    setActiveTab('agreements');
+    setSelectedAgreementId((current) => (current === routeAgreementId ? current : routeAgreementId));
+  }, [routeAgreementId]);
+
+  useEffect(() => {
+    if (
+      routeSection !== 'review'
+      || !routeAgreementId
+      || agreementDetailQuery.isLoading
+      || !selectedAgreement
+    ) {
+      return undefined;
+    }
+
+    const timerId = window.setTimeout(() => {
+      reviewSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+
+    return () => window.clearTimeout(timerId);
+  }, [agreementDetailQuery.isLoading, routeAgreementId, routeSection, selectedAgreement]);
+
+  const setAgreementRouteState = (agreementId, section = '') => {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.set('agreementId', agreementId);
+
+    if (section) {
+      nextSearchParams.set('section', section);
+    } else {
+      nextSearchParams.delete('section');
+    }
+
+    setSearchParams(nextSearchParams);
+  };
+
+  const clearAgreementRouteState = () => {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete('agreementId');
+    nextSearchParams.delete('section');
+    setSearchParams(nextSearchParams, { replace: true });
+  };
+
   const openRequestDrawer = (requestId) => {
     setSelectedRequestId(requestId);
   };
 
-  const openAgreementDrawer = (agreementId) => {
+  const openAgreementDrawer = (agreementId, section = '') => {
+    setActiveTab('agreements');
     setSelectedAgreementId(agreementId);
+    setAgreementRouteState(agreementId, section);
   };
 
   const handleRequestSubmit = () => {
@@ -956,6 +1009,7 @@ const OrderModel = () => {
           setPaymentForm(createDefaultPaymentForm());
           setReviewForm(createDefaultReviewForm());
           setRevisionDrafts({});
+          clearAgreementRouteState();
         }}
         title={selectedAgreement?.agreementNumber || 'Agreement workspace'}
         wide
@@ -1133,7 +1187,7 @@ const OrderModel = () => {
               )}
             </section>
 
-            <section className="rounded-3xl border border-slate-200 p-4 dark:border-slate-800">
+            <section ref={reviewSectionRef} className="rounded-3xl border border-slate-200 p-4 dark:border-slate-800">
               <h3 className="text-lg font-bold text-slate-950 dark:text-white">{ui.review}</h3>
               {reviewQuery.isLoading ? (
                 <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">Loading review...</p>

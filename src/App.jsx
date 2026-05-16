@@ -1,4 +1,4 @@
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
@@ -19,6 +19,13 @@ import CategoryManager from './pages/CategoryManager';
 import OrderModel from './pages/OrderModel';
 import Login from './pages/Login';
 import BrandSetup from './pages/BrandSetup';
+
+const LegacyAgreementRedirect = () => {
+  const { agreementId = '' } = useParams();
+  const encodedAgreementId = encodeURIComponent(agreementId);
+
+  return <Navigate to={`/collaboration?agreementId=${encodedAgreementId}&section=review`} replace />;
+};
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,6 +65,8 @@ function App() {
                       <Route path="/categories/view" element={<CategoryManager />} />
                       <Route path="/add-category" element={<CategoryManager />} />
                       <Route path="/categories" element={<CategoryManager />} />
+                      <Route path="/brand/model-agreements/:agreementId" element={<LegacyAgreementRedirect />} />
+                      <Route path="/brand/model-agreements/:agreementId/review" element={<LegacyAgreementRedirect />} />
                       <Route path="/collaboration" element={<OrderModel />} />
                       <Route path="/notifications" element={<Notifications />} />
                       <Route path="/calendar" element={<Calendar />} />
@@ -76,4 +85,3 @@ function App() {
 }
 
 export default App;
-
