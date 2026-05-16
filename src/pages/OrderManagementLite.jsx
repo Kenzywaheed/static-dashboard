@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowPathIcon,
@@ -8,6 +8,7 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import { useLanguage } from '../hooks/useLanguage';
 import { normalizePaginatedResponse } from '../services/apiResponseUtils';
 import { ordersAPI } from '../services/endpoints';
 
@@ -96,6 +97,7 @@ const canDeliverOrder = (order) => String(order?.orderStatus || '').toUpperCase(
 
 export default function OrderManagementLite() {
   const queryClient = useQueryClient();
+  const { isRtl, language } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedOrderId, setSelectedOrderId] = useState('');
@@ -187,6 +189,40 @@ export default function OrderManagementLite() {
   ];
 
   const selectedOrderTimeline = useMemo(() => buildTimeline(selectedOrder), [selectedOrder]);
+  const isDrawerOpen = Boolean(selectedOrderId);
+  const selectedOrderItemsCount = selectedOrder?.items?.length ?? 0;
+  const selectedOrderPrimaryItem = useMemo(() => {
+    if (!selectedOrder?.items?.length) {
+      return '';
+    }
+
+    const firstItem = selectedOrder.items[0];
+
+    return language === 'ar'
+      ? firstItem.productNameAr || firstItem.productNameEn || 'Product'
+      : firstItem.productNameEn || firstItem.productNameAr || 'Product';
+  }, [language, selectedOrder?.items]);
+
+  useEffect(() => {
+    if (!isDrawerOpen) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setSelectedOrderId('');
+      }
+    };
+
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isDrawerOpen]);
 
   return (
     <div className="space-y-6">
@@ -347,126 +383,167 @@ export default function OrderManagementLite() {
         </div>
       )}
 
-      <div className={`fixed inset-0 z-[80] transition ${selectedOrderId ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+      <div className={`fixed inset-0 z-[80] transition ${isDrawerOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
         <div
           aria-hidden="true"
           onClick={() => setSelectedOrderId('')}
-          className={`absolute inset-0 bg-slate-950/35 transition ${selectedOrderId ? 'opacity-100' : 'opacity-0'}`}
+          className={`absolute inset-0 bg-slate-950/35 transition ${isDrawerOpen ? 'opacity-100' : 'opacity-0'}`}
         />
-        <aside className={`absolute right-0 top-0 h-full w-full max-w-[560px] border-l border-slate-200 bg-white shadow-2xl transition duration-300 dark:border-slate-800 dark:bg-slate-950 ${selectedOrderId ? 'translate-x-0' : 'translate-x-full'}`}>
-          <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5 dark:border-slate-800">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--brand-primary)]">Order details</p>
-              <h2 className="mt-2 text-xl font-bold text-slate-950 dark:text-white">
-                {selectedOrder?.orderNumber || selectedOrderId || 'Loading...'}
-              </h2>
+        <aside className={`absolute top-0 flex h-full w-full max-w-[640px] flex-col overflow-hidden bg-white shadow-2xl transition duration-300 dark:bg-slate-950 ${isRtl ? 'left-0 border-r' : 'right-0 border-l'} border-slate-200 dark:border-slate-800 ${isDrawerOpen ? 'translate-x-0' : isRtl ? '-translate-x-full' : 'translate-x-full'}`}>
+          <div className={`shrink-0 border-b border-slate-200 dark:border-slate-800 ${isRtl ? 'text-right' : 'text-left'}`}>
+            <div className={`flex items-start justify-between gap-4 px-6 py-5 ${isRtl ? 'flex-row-reverse' : ''}`}>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--brand-primary)]">Order details</p>
+                <h2 className="mt-2 break-words text-xl font-bold text-slate-950 dark:text-white">
+                  {selectedOrder?.orderNumber || selectedOrderId || 'Loading...'}
+                </h2>
+                <div className={`mt-3 flex flex-wrap gap-2 ${isRtl ? 'justify-end' : ''}`}>
+                  <span className={`rounded-full px-3 py-2 text-xs font-bold ring-1 ${statusTone(selectedOrder?.orderStatus || 'PENDING')}`}>
+                    {selectedOrder?.orderStatus || 'Loading'}
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+                    {selectedOrder?.paymentStatus || 'Payment pending'}
+                  </span>
+                </div>
+              </div>
+              <button type="button" onClick={() => setSelectedOrderId('')} className="rounded-2xl border border-slate-300 p-2.5 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+                <XMarkIcon className="h-5 w-5" />
+              </button>
             </div>
-            <button type="button" onClick={() => setSelectedOrderId('')} className="rounded-2xl border border-slate-300 p-2.5 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
-              <XMarkIcon className="h-5 w-5" />
-            </button>
           </div>
 
           {loadingSelectedOrder ? (
-            <div className="p-6 text-sm text-slate-500 dark:text-slate-400">Loading order details...</div>
+            <div className="flex flex-1 items-center justify-center p-6 text-sm text-slate-500 dark:text-slate-400">Loading order details...</div>
           ) : !selectedOrder ? (
-            <div className="p-6 text-sm text-slate-500 dark:text-slate-400">No order details are available.</div>
+            <div className="flex flex-1 items-center justify-center p-6 text-sm text-slate-500 dark:text-slate-400">No order details are available.</div>
           ) : (
-            <div className="space-y-6 overflow-y-auto px-6 py-6">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <InfoTile label="Customer" value={selectedOrder.customerName || selectedOrder.customerEmail} />
-                <InfoTile label="Order status" value={selectedOrder.orderStatus} />
-                <InfoTile label="Payment" value={`${selectedOrder.paymentMethod || 'N/A'} / ${selectedOrder.paymentStatus || 'N/A'}`} />
-                <InfoTile label="Total" value={money(selectedOrder.totalPrice)} />
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  disabled={!canShipOrder(selectedOrder) || shipMutation.isPending || deliverMutation.isPending}
-                  onClick={() => shipMutation.mutate(selectedOrder.orderId)}
-                  className="rounded-xl bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {shipMutation.isPending ? 'Shipping...' : 'Mark as shipped'}
-                </button>
-                <button
-                  type="button"
-                  disabled={!canDeliverOrder(selectedOrder) || shipMutation.isPending || deliverMutation.isPending}
-                  onClick={() => deliverMutation.mutate(selectedOrder.orderId)}
-                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200"
-                >
-                  {deliverMutation.isPending ? 'Delivering...' : 'Mark as delivered'}
-                </button>
-              </div>
-
-              <section className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-                <h3 className="text-sm font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Customer</h3>
-                <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
-                  <p>{selectedOrder.customerName || 'Customer not available'}</p>
-                  <p>{selectedOrder.customerEmail || 'Email not available'}</p>
-                  <p>{selectedOrder.customerPhoneNumber || 'Phone not available'}</p>
-                </div>
-              </section>
-
-              <section className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-                <h3 className="text-sm font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Shipping</h3>
-                {selectedOrder.shippingAddress ? (
-                  <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
-                    <p>{formatShippingAddress(selectedOrder.shippingAddress)}</p>
-                    {selectedOrder.shippingAddress?.formattedAddressAr ? (
-                      <p className="text-xs text-slate-500 dark:text-slate-400">{selectedOrder.shippingAddress?.formattedAddressAr}</p>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="mt-3 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-400">
-                    No shipping address available
-                  </div>
-                )}
-              </section>
-
-              <section>
-                <h3 className="text-sm font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Timeline</h3>
-                <div className="mt-4 space-y-3">
-                  {selectedOrderTimeline.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                      Timeline events are not available for this order yet.
+            <div className={`min-h-0 flex-1 overflow-y-auto px-6 py-6 ${isRtl ? 'text-right' : 'text-left'}`}>
+              <div className="space-y-6 pb-6">
+                <section className="rounded-[26px] border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm dark:border-slate-800 dark:from-slate-950 dark:to-slate-900">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Customer</p>
+                      <p className="mt-2 break-words text-xl font-bold text-slate-950 dark:text-white">
+                        {selectedOrder.customerName || selectedOrder.customerEmail || 'Customer'}
+                      </p>
+                      <p className="mt-2 break-words text-sm text-slate-500 dark:text-slate-400">
+                        {selectedOrder.customerEmail || 'Email not available'}
+                      </p>
                     </div>
-                  ) : selectedOrderTimeline.map((event) => (
-                    <div key={`${event.label}-${event.eventAt}`} className="flex gap-3">
-                      <div className="mt-1 h-3 w-3 rounded-full bg-[var(--brand-primary)]" />
-                      <div>
-                        <p className="text-sm font-semibold text-slate-950 dark:text-white">{event.label}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">{formatDateTime(event.eventAt)}</p>
+                    <div className={`grid gap-2 sm:min-w-[220px] ${isRtl ? 'justify-items-start' : 'justify-items-end'}`}>
+                      <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">Primary item</p>
+                      <p className="text-sm font-bold text-slate-950 dark:text-white">{selectedOrderPrimaryItem || 'No items yet'}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{selectedOrderItemsCount} item{selectedOrderItemsCount === 1 ? '' : 's'}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <InfoTile label="Customer" value={selectedOrder.customerName || selectedOrder.customerEmail} />
+                    <InfoTile label="Order status" value={selectedOrder.orderStatus} />
+                    <InfoTile label="Payment" value={`${selectedOrder.paymentMethod || 'N/A'} / ${selectedOrder.paymentStatus || 'N/A'}`} />
+                    <InfoTile label="Total" value={money(selectedOrder.totalPrice)} />
+                    <InfoTile label="Created" value={formatDateTime(selectedOrder.createdAt)} />
+                    <InfoTile label="Updated" value={formatDateTime(selectedOrder.updatedAt || selectedOrder.deliveredAt || selectedOrder.shippedAt || selectedOrder.paidAt)} />
+                    <InfoTile label="Items" value={`${selectedOrderItemsCount} line items`} />
+                    <InfoTile label="Phone" value={selectedOrder.customerPhoneNumber || 'Phone not available'} />
+                  </div>
+                </section>
+
+                <section className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
+                  <div className={`flex flex-wrap gap-3 ${isRtl ? 'justify-start' : ''}`}>
+                    <button
+                      type="button"
+                      disabled={!canShipOrder(selectedOrder) || shipMutation.isPending || deliverMutation.isPending}
+                      onClick={() => shipMutation.mutate(selectedOrder.orderId)}
+                      className="rounded-xl bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {shipMutation.isPending ? 'Shipping...' : 'Mark as shipped'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canDeliverOrder(selectedOrder) || shipMutation.isPending || deliverMutation.isPending}
+                      onClick={() => deliverMutation.mutate(selectedOrder.orderId)}
+                      className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200"
+                    >
+                      {deliverMutation.isPending ? 'Delivering...' : 'Mark as delivered'}
+                    </button>
+                  </div>
+                </section>
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <section className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
+                    <h3 className="text-sm font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Customer</h3>
+                    <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
+                      <p className="break-words">{selectedOrder.customerName || 'Customer not available'}</p>
+                      <p className="break-words">{selectedOrder.customerEmail || 'Email not available'}</p>
+                      <p className="break-words">{selectedOrder.customerPhoneNumber || 'Phone not available'}</p>
+                    </div>
+                  </section>
+
+                  <section className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
+                    <h3 className="text-sm font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Shipping</h3>
+                    {selectedOrder.shippingAddress ? (
+                      <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
+                        <p className="break-words">{formatShippingAddress(selectedOrder.shippingAddress)}</p>
+                        {selectedOrder.shippingAddress?.formattedAddressAr ? (
+                          <p className="break-words text-xs text-slate-500 dark:text-slate-400">{selectedOrder.shippingAddress?.formattedAddressAr}</p>
+                        ) : null}
                       </div>
-                    </div>
-                  ))}
+                    ) : (
+                      <div className="mt-3 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-400">
+                        No shipping address available
+                      </div>
+                    )}
+                  </section>
                 </div>
-              </section>
 
-              <section>
-                <h3 className="text-sm font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Items</h3>
-                <div className="mt-4 space-y-3">
-                  {(selectedOrder.items || []).length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                      No line items were returned for this order.
-                    </div>
-                  ) : selectedOrder.items.map((item) => (
-                    <article key={item.orderItemId} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-                      <div className="flex items-start justify-between gap-3">
+                <section className="rounded-[24px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
+                  <h3 className="text-sm font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Timeline</h3>
+                  <div className="mt-4 space-y-3">
+                    {selectedOrderTimeline.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                        Timeline events are not available for this order yet.
+                      </div>
+                    ) : selectedOrderTimeline.map((event) => (
+                      <div key={`${event.label}-${event.eventAt}`} className={`flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                        <div className="mt-1 h-3 w-3 rounded-full bg-[var(--brand-primary)]" />
                         <div className="min-w-0">
-                          <p className="text-sm font-bold text-slate-950 dark:text-white">{item.productNameEn || item.productNameAr}</p>
-                          <p className="mt-1 text-xs uppercase tracking-[0.12em] text-slate-400">{item.colorCode || '-'} / {item.size || '-'}</p>
-                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.sku || '-'}</p>
+                          <p className="text-sm font-semibold text-slate-950 dark:text-white">{event.label}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">{formatDateTime(event.eventAt)}</p>
                         </div>
-                        <p className="text-sm font-bold text-slate-950 dark:text-white">{money(item.totalPrice)}</p>
                       </div>
-                      <div className="mt-3 flex items-center justify-between text-sm text-slate-600 dark:text-slate-300">
-                        <span>Qty {item.quantity}</span>
-                        <span>{money(item.unitPrice)} each</span>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="rounded-[24px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
+                  <h3 className="text-sm font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Items</h3>
+                  <div className="mt-4 space-y-3">
+                    {(selectedOrder.items || []).length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                        No line items were returned for this order.
                       </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
+                    ) : selectedOrder.items.map((item) => (
+                      <article key={item.orderItemId} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="break-words text-sm font-bold text-slate-950 dark:text-white">
+                              {(language === 'ar' ? item.productNameAr || item.productNameEn : item.productNameEn || item.productNameAr) || 'Unnamed product'}
+                            </p>
+                            <p className="mt-1 break-words text-xs uppercase tracking-[0.12em] text-slate-400">{item.colorCode || '-'} / {item.size || '-'}</p>
+                            <p className="mt-1 break-words text-xs text-slate-500 dark:text-slate-400">{item.sku || '-'}</p>
+                          </div>
+                          <p className="shrink-0 text-sm font-bold text-slate-950 dark:text-white">{money(item.totalPrice)}</p>
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600 dark:text-slate-300">
+                          <span>Qty {item.quantity}</span>
+                          <span>{money(item.unitPrice)} each</span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              </div>
             </div>
           )}
         </aside>
@@ -476,8 +553,8 @@ export default function OrderManagementLite() {
 }
 
 const InfoTile = ({ label, value }) => (
-  <div className="rounded-2xl bg-slate-100 p-4 dark:bg-slate-900">
+  <div className="min-w-0 rounded-2xl bg-slate-100 p-4 dark:bg-slate-900">
     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">{label}</p>
-    <p className="mt-2 text-sm text-slate-900 dark:text-white">{value || 'Not available'}</p>
+    <p className="mt-2 break-words text-sm text-slate-900 dark:text-white">{value || 'Not available'}</p>
   </div>
 );
