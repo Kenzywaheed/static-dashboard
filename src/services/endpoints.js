@@ -207,10 +207,8 @@ export const toFormData = (data, { keepEmptyStrings = false } = {}) => {
   return formData;
 };
 
-const toJsonBody = (data = {}) => JSON.stringify(
-  Object.fromEntries(
-    Object.entries(data).filter(([, value]) => value !== null && value !== undefined && value !== ''),
-  ),
+const toJsonPayload = (data = {}) => Object.fromEntries(
+  Object.entries(data).filter(([, value]) => value !== null && value !== undefined && value !== ''),
 );
 
 const isFileLike = (value) => value instanceof Blob || value instanceof File;
@@ -353,7 +351,7 @@ apiClient.interceptors.response.use(
 export const authAPI = {
   generateOtp: ({ email, recipient, purpose = 'EMAIL', channel = 'LOGIN', expiryMinutes }) => axios.post(
     `${OTP_BASE_URL}/generate`,
-    toJsonBody({
+    toJsonPayload({
       email,
       recipient,
       purpose,
@@ -369,7 +367,7 @@ export const authAPI = {
 
   verifyOtp: ({ recipient, purpose = 'EMAIL', otpCode }) => axios.post(
     `${OTP_BASE_URL}/verify`,
-    toJsonBody({
+    toJsonPayload({
       recipient,
       purpose,
       otpCode,
