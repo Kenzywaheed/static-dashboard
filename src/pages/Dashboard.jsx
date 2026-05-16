@@ -2,9 +2,6 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArchiveBoxIcon,
-  ArrowPathIcon,
-  EnvelopeIcon,
-  ExclamationTriangleIcon,
   FolderIcon,
   ShoppingBagIcon,
   WalletIcon,
@@ -20,9 +17,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import BrandAvatar from '../components/Common/BrandAvatar';
-import { useBrandProfile } from '../hooks/useBrandProfile';
-import { useLanguage } from '../hooks/useLanguage';
 import { dashboardAPI } from '../services/endpoints';
 
 const RANGE_OPTIONS = ['7D', '30D'];
@@ -159,130 +153,7 @@ const EmptyBlock = ({ message }) => (
   </div>
 );
 
-const BrandProfilePanel = ({ brandProfileQuery, fallbackBrandName, t }) => {
-  const panelClassName = 'rounded-[24px] border border-slate-200 bg-slate-50/90 p-4 dark:border-slate-800 dark:bg-slate-950/70';
-  const title = t.header?.profile || 'Brand profile';
-  const refreshLabel = brandProfileQuery.isFetching
-    ? (t.category?.refreshing || 'Refreshing...')
-    : (t.category?.refresh || 'Refresh');
-
-  if (brandProfileQuery.isLoading) {
-    return (
-      <aside className={`${panelClassName} animate-pulse`}>
-        <div className="h-4 w-24 rounded bg-slate-200 dark:bg-slate-800" />
-        <div className="mt-4 flex items-center gap-3">
-          <div className="h-16 w-16 rounded-2xl bg-slate-200 dark:bg-slate-800" />
-          <div className="min-w-0 flex-1 space-y-3">
-            <div className="h-4 w-2/3 rounded bg-slate-200 dark:bg-slate-800" />
-            <div className="h-3 w-5/6 rounded bg-slate-200 dark:bg-slate-800" />
-          </div>
-        </div>
-      </aside>
-    );
-  }
-
-  if (brandProfileQuery.isMissingBrandId) {
-    return (
-      <aside className={panelClassName}>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-primary)]">{title}</p>
-        <p className="mt-3 text-sm font-semibold text-slate-950 dark:text-white">{t.category?.brandMissing || 'Brand id missing'}</p>
-        <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-          {t.category?.brandRequired || 'Brand id is missing from the current session.'}
-        </p>
-      </aside>
-    );
-  }
-
-  if (brandProfileQuery.isError) {
-    return (
-      <aside className={panelClassName}>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-primary)]">{title}</p>
-        <div className="mt-3 flex items-start gap-2 text-sm text-rose-600 dark:text-rose-300">
-          <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>We could not load the brand profile right now.</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => brandProfileQuery.refetch()}
-          disabled={brandProfileQuery.isFetching}
-          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <ArrowPathIcon className="h-4 w-4" />
-          <span>{refreshLabel}</span>
-        </button>
-      </aside>
-    );
-  }
-
-  if (brandProfileQuery.isEmpty) {
-    return (
-      <aside className={panelClassName}>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-primary)]">{title}</p>
-        <p className="mt-3 text-sm font-semibold text-slate-950 dark:text-white">No brand profile details yet</p>
-        <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-          This endpoint did not return a brand name, email, or icon for the current account.
-        </p>
-        <button
-          type="button"
-          onClick={() => brandProfileQuery.refetch()}
-          disabled={brandProfileQuery.isFetching}
-          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-        >
-          <ArrowPathIcon className="h-4 w-4" />
-          <span>{refreshLabel}</span>
-        </button>
-      </aside>
-    );
-  }
-
-  const brandName = brandProfileQuery.profile.brandName || fallbackBrandName;
-  const brandEmail = brandProfileQuery.profile.brandEmail || 'No brand email provided yet.';
-
-  return (
-    <aside className={panelClassName}>
-      <div className="flex items-start gap-4">
-        <BrandAvatar
-          name={brandName}
-          icon={brandProfileQuery.profile.icon}
-          alt={brandName}
-          sizeClassName="h-16 w-16"
-          roundedClassName="rounded-2xl"
-          textClassName="text-xl"
-          iconClassName="h-7 w-7"
-        />
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--brand-primary)]">{title}</p>
-          <h2 className="mt-2 truncate text-xl font-semibold text-slate-950 dark:text-white">{brandName}</h2>
-          <div className="mt-2 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-            <EnvelopeIcon className="h-4 w-4 shrink-0" />
-            <span className="truncate">{brandEmail}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="max-w-full rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
-          <span className="block max-w-[180px] truncate" title={brandProfileQuery.brandId}>
-            Brand ID: {brandProfileQuery.brandId}
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={() => brandProfileQuery.refetch()}
-          disabled={brandProfileQuery.isFetching}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-        >
-          <ArrowPathIcon className="h-4 w-4" />
-          <span>{refreshLabel}</span>
-        </button>
-      </div>
-    </aside>
-  );
-};
-
 const Dashboard = () => {
-  const { t } = useLanguage();
-  const brandProfileQuery = useBrandProfile();
   const [range, setRange] = useState('7D');
 
   const brandQuery = useDashboardBoxQuery(range, (data) => ({
@@ -326,7 +197,6 @@ const Dashboard = () => {
   const storeMood = storeMoodQuery.data || defaultHomeData.storeMood;
   const recentOrders = recentOrdersQuery.data || defaultHomeData.recentOrders;
   const needAttention = needAttentionQuery.data || defaultHomeData.needAttention;
-  const heroBrandName = brandProfileQuery.profile.brandName || brand.brandName;
 
   if (isLoading) {
     return <div className={`${cardClass} text-sm text-slate-500 dark:text-slate-400`}>Loading dashboard...</div>;
@@ -350,39 +220,31 @@ const Dashboard = () => {
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-sm font-medium text-[var(--brand-primary)]">Home</p>
-              <h1 className="mt-2 text-3xl font-semibold text-slate-950 dark:text-white">{heroBrandName}</h1>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">
-                Brand performance, order flow, recent catalog activity, and the items that need your attention first.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {RANGE_OPTIONS.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setRange(option)}
-                  className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                    range === option
-                      ? 'bg-[var(--brand-primary)] text-white'
-                      : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  {option}
-                </button>
-              ))}
-            </div>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-sm font-medium text-[var(--brand-primary)]">Home</p>
+            <h1 className="mt-2 text-3xl font-semibold text-slate-950 dark:text-white">{brand.brandName}</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+              Brand performance, order flow, recent catalog activity, and the items that need your attention first.
+            </p>
           </div>
 
-          <BrandProfilePanel
-            brandProfileQuery={brandProfileQuery}
-            fallbackBrandName={brand.brandName}
-            t={t}
-          />
+          <div className="flex flex-wrap gap-2">
+            {RANGE_OPTIONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setRange(option)}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                  range === option
+                    ? 'bg-[var(--brand-primary)] text-white'
+                    : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800'
+                }`}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
