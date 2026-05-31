@@ -77,6 +77,7 @@ const getOtpErrorMessage = (t, errorMessage, remainingAttempts) => {
 const Login = () => {
   const {
     isAuthenticated,
+    pendingOtpCode,
     requestBrandOtp,
     verifyBrandOtp,
   } = useAuth();
@@ -277,6 +278,11 @@ const Login = () => {
                       disabled={isLoading}
                     />
                   </div>
+                  {pendingOtpCode && (
+                    <p className="mt-3 rounded-lg border border-dashed border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
+                      Demo OTP: <span className="font-bold tracking-[0.18em]">{pendingOtpCode}</span>
+                    </p>
+                  )}
                 </div>
 
                 <button
