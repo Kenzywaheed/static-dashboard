@@ -221,6 +221,10 @@ const Login = () => {
               </button>
             </div>
 
+            <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+              Sign in with this account: <span className="font-semibold">mostafa.mahmoudegy10+20@gmail.com</span>
+            </div>
+
             {error && (
               <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
                 {error}
